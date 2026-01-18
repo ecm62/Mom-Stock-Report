@@ -7,7 +7,7 @@ from deep_translator import GoogleTranslator
 from datetime import datetime, timedelta, timezone
 from streamlit_autorefresh import st_autorefresh
 
-# --- 1. 頁面與時區設定 ---
+# --- 1. 頁面設定 ---
 st.set_page_config(layout="wide", page_title="阿美的股海顧問", initial_sidebar_state="collapsed")
 st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh")
 
@@ -15,18 +15,10 @@ TW_TZ = timezone(timedelta(hours=8))
 def get_tw_time():
     return datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M')
 
-# --- 2. GAS API ---
-# 請確認 GAS 已經重新部署 (無密碼版)
+# --- 2. GAS API (已更新為最新網址) ---
 GAS_URL = "https://script.google.com/macros/s/AKfycbwTsM79MMdedizvIcIn7tgwT81VIhj87WM-bvR45QgmMIUsIemmyR_FzMvG3v5LEHEvPw/exec"
 
-# --- 3. 媒體與 CSS 設定 ---
-MEDIA_PRESETS = {
-    "雅虎": "https://finance.yahoo.com/news/rssindex", "鉅亨": "https://news.cnyes.com/rss/cat/headline",
-    "聯合": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money", "經濟": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
-    "moneydj": "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml", "商周": "https://www.businessweekly.com.tw/rss/latest",
-    "科技": "https://technews.tw/feed/"
-}
-
+# --- 3. CSS 設定 ---
 st.markdown("""
 <style>
 html, body, [class*="css"] { font-family: "Microsoft JhengHei", sans-serif; }
@@ -47,60 +39,48 @@ div[data-testid="column"] { padding: 0 2px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. 使用者系統 (最簡化版) ---
+# --- 4. 側邊欄與使用者設定 ---
 query_params = st.query_params
-# 預設使用者為 "阿美"，如果網址有 ?user=秀英，就變秀英
-current_user = query_params.get("user", "阿美")
+default_user = query_params.get("user", "阿美")
 
-# 側邊欄
 with st.sidebar:
     st.header("👤 使用者設定")
-    st.info("輸入名字即可切換不同人的清單")
-    
-    # 只要改這個框框，使用者就換人了，超簡單
-    new_user_input = st.text_input("您的名字", value=current_user)
-    
-    # 如果名字變了，重新載入
-    if new_user_input != current_user:
-        st.query_params["user"] = new_user_input
+    current_user = st.text_input("您的名字", value=default_user)
+    if current_user != default_user:
+        st.query_params["user"] = current_user
         st.rerun()
     
-    st.markdown(f"目前顯示：**{new_user_input}** 的資料")
-    
-    # 分享連結
-    st.divider()
-    with st.expander("🔗 產生分享連結"):
-        st.caption("複製下方網址給朋友，對方打開就是這個名字的清單")
-        st.code(f"https://share.streamlit.io/...(您的網址)...?user={new_user_input}", language="text")
+    st.markdown(f"目前顯示：**{current_user}** 的資料")
     st.divider()
 
     st.header("⚙️ 股票管理")
     with st.expander("➕ 新增到【庫存股】"):
         inv_code = st.text_input("代碼", key="add_inv", placeholder="如 2330.TW")
         if st.button("加入庫存"):
-            try: requests.get(GAS_URL, params={"action": "add", "code": inv_code.upper(), "type": "inventory", "user": new_user_input}, timeout=2)
+            try: requests.get(GAS_URL, params={"action": "add", "code": inv_code.upper(), "type": "inventory", "user": current_user}, timeout=2)
             except: pass
             st.cache_data.clear(); st.rerun()
             
     with st.expander("➕ 新增到【觀察名單】"):
         watch_code = st.text_input("代碼", key="add_watch", placeholder="如 2603.TW")
         if st.button("加入觀察"):
-            try: requests.get(GAS_URL, params={"action": "add", "code": watch_code.upper(), "type": "watchlist", "user": new_user_input}, timeout=2)
+            try: requests.get(GAS_URL, params={"action": "add", "code": watch_code.upper(), "type": "watchlist", "user": current_user}, timeout=2)
             except: pass
             st.cache_data.clear(); st.rerun()
 
     with st.expander("📰 新增【新聞頻道】"):
+        MEDIA_PRESETS = {"雅虎": "https://finance.yahoo.com/news/rssindex", "鉅亨": "https://news.cnyes.com/rss/cat/headline"}
         new_rss = st.text_input("輸入「鉅亨」或網址", key="rss_in")
         if st.button("加入頻道"):
             url = new_rss
             if new_rss in MEDIA_PRESETS: url = MEDIA_PRESETS[new_rss]
-            try: requests.get(GAS_URL, params={"action": "add", "code": url, "type": "news", "user": new_user_input}, timeout=2)
+            try: requests.get(GAS_URL, params={"action": "add", "code": url, "type": "news", "user": current_user}, timeout=2)
             except: pass
             st.cache_data.clear(); st.rerun()
     
     if st.button("🔄 強制更新"): st.cache_data.clear(); st.rerun()
 
-# 標題與更新區
+# 標題區
 c_title, c_btn = st.columns([3, 1])
 with c_title:
     st.title(f"👵 {current_user} 的股海顧問") 
@@ -213,5 +193,83 @@ def fetch_and_filter_news(user_rss_urls):
 # 1. 庫存
 st.subheader(f"💰 {current_user} 的庫存")
 inv_list = get_list_from_cloud("inventory", current_user)
+df = pd.DataFrame() # 預防性宣告，避免 NameError
 if inv_list:
-    df
+    df = get_stock_data(inv_list)
+
+if not df.empty:
+    cols = st.columns(6)
+    for i, row in df.iterrows():
+        with cols[i%6]:
+            st.markdown(f"""
+            <div class="compact-card" style="border-left: 4px solid {row['color']};">
+                <div class="compact-name" title="{row['name']}">{row['name']}</div>
+                <div class="compact-price" style="color:{row['color']}">{row['price']}</div>
+                <div style="font-size:12px; font-weight:bold; color:{row['color']}">{row['sign']} {row['pct']}</div>
+            </div>""", unsafe_allow_html=True)
+            if st.button("✖", key=f"d_{row['code']}"): 
+                update_cloud_remove(row['full_code'], "inventory", current_user)
+                st.cache_data.clear(); st.rerun()
+else: 
+    st.info("目前清單是空的，請從左側新增股票。")
+
+# 2. 觀察
+st.subheader(f"👀 {current_user} 的觀察名單")
+watch_list = get_list_from_cloud("watchlist", current_user)
+df_w = pd.DataFrame() # 預防性宣告
+if watch_list:
+    df_w = get_stock_data(watch_list)
+
+if not df_w.empty:
+    cols2 = st.columns(6)
+    for i, row in df_w.iterrows():
+        with cols2[i%6]:
+            st.markdown(f"""<div class="compact-card"><div class="compact-name">{row['name']}</div><div class="compact-price" style="color:{row['color']}">{row['price']}</div></div>""", unsafe_allow_html=True)
+            if st.button("✖", key=f"dw_{row['code']}"): 
+                update_cloud_remove(row['full_code'], "watchlist", current_user)
+                st.cache_data.clear(); st.rerun()
+else:
+    st.info("暫無觀察名單。")
+
+# 3. 熱門
+st.markdown("---")
+st.subheader("🏆 市場熱門戰情室")
+hot_cols = st.columns(3)
+idx = 0
+for title, tickers in HOT_LISTS.items():
+    with hot_cols[idx]:
+        st.markdown(f'<div class="rank-title">{title}</div>', unsafe_allow_html=True)
+        df_hot = get_stock_data(tickers)
+        html = '<div class="rank-box">'
+        for _, row in df_hot.iterrows():
+            html += f"""<div class="rank-row"><span class="rank-name">{row['name']}</span><span class="rank-price" style="color:{row['color']}">{row['sign']} {row['price']}</span></div>"""
+        html += '</div>'
+        st.markdown(html, unsafe_allow_html=True)
+    idx += 1
+
+# 4. 新聞
+st.markdown("---")
+st.subheader("🗞️ 產業新聞快遞")
+user_rss = get_list_from_cloud("news", current_user)
+with st.spinner("正在搜尋最新新聞..."):
+    news_buckets = fetch_and_filter_news(user_rss)
+
+display_order = ["🤖 AI 與半導體", "🏗️ 鋼鐵與水泥", "🚢 航運與運輸", "🚗 汽車與供應鏈", "💰 金融與銀行", "⚡ 重電與綠能", "💊 生技與防疫", "🏠 營建與房產", "🌍 其他頭條"]
+
+for category in display_order:
+    items = news_buckets.get(category, [])
+    if items:
+        st.markdown(f'<div class="news-category-header">{category} ({len(items)})</div>', unsafe_allow_html=True)
+        for n in items: 
+            st.markdown(f"""
+            <div class="news-item-compact">
+                <a href="{n['link']}" target="_blank" class="news-link-text">
+                    {n['title']}
+                </a>
+                <div class="news-meta-compact">
+                    {n['src']} • {n['date']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+st.markdown("<br><br>", unsafe_allow_html=True)
