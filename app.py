@@ -4,98 +4,118 @@ import pandas as pd
 import feedparser
 import requests
 from deep_translator import GoogleTranslator
-from datetime import datetime, timedelta, timezone # 引入時區處理
+from datetime import datetime, timedelta, timezone
 from streamlit_autorefresh import st_autorefresh
 
 # --- 1. 頁面與時區設定 ---
 st.set_page_config(layout="wide", page_title="阿美的股海顧問", initial_sidebar_state="collapsed")
+
+# 設定每 5 分鐘自動刷新
 st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh")
 
-# 定義台灣時區 (UTC+8)
+# 定義台灣時區
 TW_TZ = timezone(timedelta(hours=8))
 def get_tw_time():
     return datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M')
 
-# --- 2. GAS API ---
+# --- 2. GAS API (已更新為您提供的網址) ---
 GAS_URL = "https://script.google.com/macros/s/AKfycbwTsM79MMdedizvIcIn7tgwT81VIhj87WM-bvR45QgmMIUsIemmyR_FzMvG3v5LEHEvPw/exec"
 
-# --- 3. CSS 優化 (新聞緊密版) ---
+# --- 3. 媒體與 CSS 設定 ---
+MEDIA_PRESETS = {
+    "雅虎": "https://finance.yahoo.com/news/rssindex", "鉅亨": "https://news.cnyes.com/rss/cat/headline",
+    "聯合": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money", "經濟": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
+    "moneydj": "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml", "商周": "https://www.businessweekly.com.tw/rss/latest",
+    "科技": "https://technews.tw/feed/"
+}
+
 st.markdown("""
     <style>
     html, body, [class*="css"] { font-family: "Microsoft JhengHei", sans-serif; }
     
-    /* 股票小卡片 */
-    .compact-card {
-        border: 1px solid #ddd; border-radius: 6px;
-        padding: 5px 2px; text-align: center;
-        background: white; margin-bottom: 5px;
-        box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-        min-height: 80px;
-    }
+    /* 股票卡片 */
+    .compact-card { border: 1px solid #ddd; border-radius: 6px; padding: 5px 2px; text-align: center; background: white; margin-bottom: 5px; box-shadow: 1px 1px 2px rgba(0,0,0,0.1); min-height: 80px; }
     .compact-name { font-size: 15px !important; font-weight: 900; color: #333; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
     .compact-price { font-size: 18px !important; font-weight: bold; margin: 0;}
     
-    /* 新聞區塊標題 */
-    .news-category-header {
-        background-color: #e3f2fd; color: #0d47a1;
-        padding: 8px 12px; border-left: 6px solid #0d47a1;
-        font-size: 20px !important; font-weight: 900;
-        margin-top: 20px; margin-bottom: 5px;
-        border-radius: 4px;
-    }
-    
-    /* 新聞列表 (緊密模式) */
-    .news-list-container {
-        max-height: 500px; /* 超過高度可捲動，避免頁面無限長 */
-        overflow-y: auto;
-        padding-right: 5px;
-    }
-    
-    /* 單則新聞 (更緊湊) */
-    .news-item-compact { 
-        padding: 6px 0; 
-        border-bottom: 1px dashed #ccc; /* 改用虛線，視覺更輕 */
-        line-height: 1.3;
-    }
-    .news-link-text {
-        text-decoration: none; color: #222;
-        font-size: 18px !important; /* 字體夠大 */
-        font-weight: 600;
-        display: block; 
-    }
+    /* 新聞樣式 */
+    .news-category-header { background-color: #e3f2fd; color: #0d47a1; padding: 8px 12px; border-left: 6px solid #0d47a1; font-size: 20px !important; font-weight: 900; margin-top: 20px; margin-bottom: 5px; border-radius: 4px; }
+    .news-item-compact { padding: 6px 0; border-bottom: 1px dashed #ccc; line-height: 1.3; }
+    .news-link-text { text-decoration: none; color: #222; font-size: 18px !important; font-weight: 600; display: block; }
     .news-link-text:hover { color: #d32f2f; }
     .news-meta-compact { font-size: 12px; color: #666; margin-top: 2px;}
     
-    /* 按鈕優化 */
+    /* 熱門榜 */
+    .rank-title { font-size: 18px; font-weight: 900; color: #fff; background: linear-gradient(90deg, #d32f2f, #ef5350); padding: 8px; border-radius: 5px 5px 0 0; margin-top: 15px; text-align: center; }
+    .rank-box { border: 1px solid #ef5350; border-top: none; border-radius: 0 0 5px 5px; padding: 5px; background: #fff; margin-bottom: 15px; }
+    .rank-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 5px; border-bottom: 1px dashed #eee; }
+    .rank-name { font-size: 16px; font-weight: bold; color: #333; }
+    
+    /* 按鈕 */
     .stButton > button { width: 100%; border-radius: 8px; font-weight: bold; font-size: 18px;}
     
     div[data-testid="column"] { padding: 0 2px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 標題區 (含大按鈕) ---
+# --- 4. 使用者系統 (親友共享核心) ---
+# 取得網址參數，例如 ?user=秀英
+query_params = st.query_params
+default_user = query_params.get("user", "阿美")
+
+# --- 側邊欄：使用者與管理 ---
+with st.sidebar:
+    st.header("👤 使用者設定")
+    st.info("輸入名字可切換不同人的清單。")
+    # 使用者切換框
+    current_user = st.text_input("您的名字", value=default_user)
+    
+    # 若名字改變，更新網址參數 (方便分享)
+    if current_user != default_user:
+        st.query_params["user"] = current_user
+    
+    st.markdown(f"目前使用者：**{current_user}**")
+    st.divider()
+
+    st.header("⚙️ 股票管理")
+    # 傳入 user 參數，確保加到對應的人名下
+    with st.expander("➕ 新增到【庫存股】"):
+        inv_code = st.text_input("代碼", key="add_inv", placeholder="如 2330.TW")
+        if st.button("加入庫存"):
+            try: requests.get(GAS_URL, params={"action": "add", "code": inv_code.upper(), "type": "inventory", "user": current_user}, timeout=2)
+            except: pass
+            st.cache_data.clear(); st.rerun()
+            
+    with st.expander("➕ 新增到【觀察名單】"):
+        watch_code = st.text_input("代碼", key="add_watch", placeholder="如 2603.TW")
+        if st.button("加入觀察"):
+            try: requests.get(GAS_URL, params={"action": "add", "code": watch_code.upper(), "type": "watchlist", "user": current_user}, timeout=2)
+            except: pass
+            st.cache_data.clear(); st.rerun()
+
+    with st.expander("📰 新增【新聞頻道】"):
+        new_rss = st.text_input("輸入「鉅亨」或網址", key="rss_in")
+        if st.button("加入頻道"):
+            url = new_rss
+            if new_rss in MEDIA_PRESETS: url = MEDIA_PRESETS[new_rss]
+            try: requests.get(GAS_URL, params={"action": "add", "code": url, "type": "news", "user": current_user}, timeout=2)
+            except: pass
+            st.cache_data.clear(); st.rerun()
+    
+    if st.button("🔄 強制更新"): st.cache_data.clear(); st.rerun()
+
+# --- 標題區 ---
 c_title, c_btn = st.columns([3, 1])
 with c_title:
-    st.title("👵 阿美的股海顧問")
+    st.title(f"👵 {current_user} 的股海顧問") # 標題會隨名字改變
     st.caption(f"台灣時間：{get_tw_time()} | 自動更新中...")
 with c_btn:
-    st.write("") # 排版用
-    if st.button("🔄 點我立即更新", type="primary"):
+    st.write("") 
+    if st.button("🔴 點我更新股價", type="primary"):
         st.cache_data.clear()
         st.rerun()
 
-# --- 4. 資料設定 ---
-
-# 新聞來源 (火力全開版)
-RSS_SOURCES = [
-    "https://news.cnyes.com/rss/cat/headline", # 鉅亨頭條
-    "https://news.cnyes.com/rss/cat/200",      # 鉅亨台股
-    "https://news.cnyes.com/rss/cat/hotai",    # 台股速報
-    "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money", # 聯合
-    "https://finance.yahoo.com/news/rssindex", # Yahoo
-    "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml", # MoneyDJ
-    "https://technews.tw/feed/" # 科技新報
-]
+# --- 5. 資料處理函數 ---
 
 KEYWORD_MAPPING = {
     "🤖 AI 與半導體": ["台積電", "聯電", "聯發科", "日月光", "AI", "半導體", "晶圓", "輝達", "NVIDIA", "CoWoS", "先進封裝", "伺服器", "緯創", "廣達", "技嘉", "智原", "世芯", "創意"],
@@ -114,28 +134,17 @@ HOT_LISTS = {
     "💡 焦點概念": ["1519.TW", "1513.TW", "2308.TW", "2454.TW", "6669.TW", "2376.TW"] 
 }
 
-STOCK_MAP = {
-    "00878": "國泰高股息", "2301": "光寶科", "2308": "台達電", "2412": "中華電", 
-    "2476": "鉅祥", "2884": "玉山金", "2892": "第一金", "3034": "聯詠", 
-    "3035": "智原", "3363": "上詮", "3715": "定穎投控", "4772": "台特化", 
-    "5880": "合庫金", "6191": "精成科", "6761": "穩得", "6788": "華景電", 
-    "8926": "台汽電", "2330": "台積電", "2317": "鴻海", "2603": "長榮", 
-    "2609": "陽明", "2615": "萬海", "2454": "聯發科", "3231": "緯創",
-    "0056": "元大高股息", "0050": "台灣50", "00919": "群益精選", "00929": "復華優息",
-    "00940": "台灣價值", "1519": "華城", "1513": "中興電", "1503": "士電", "2382": "廣達", "6669": "緯穎",
-    "2376": "技嘉", "2002": "中鋼", "1101": "台泥", "2201": "裕隆"
-}
+STOCK_MAP = {"00878": "國泰高股息", "2330": "台積電", "2317": "鴻海", "2603": "長榮", "2609": "陽明", "2454": "聯發科", "3231": "緯創", "0056": "元大高股息", "0050": "台灣50", "00919": "群益精選", "00940": "台灣價值", "1519": "華城", "1513": "中興電", "1503": "士電", "2382": "廣達", "6669": "緯穎", "2376": "技嘉", "2002": "中鋼", "1101": "台泥", "2201": "裕隆", "2412":"中華電", "2308":"台達電", "2881":"富邦金", "2882":"國泰金"}
 
-# --- 5. 核心函數 ---
-
-def get_list_from_cloud(list_type):
+def get_list_from_cloud(list_type, user):
     try:
-        response = requests.get(GAS_URL, params={"action": "read", "type": list_type}, timeout=5)
+        # 讀取時帶入 user 參數
+        response = requests.get(GAS_URL, params={"action": "read", "type": list_type, "user": user}, timeout=5)
         return response.json() or []
     except: return []
 
-def update_cloud(action, code, list_type, price="0"):
-    try: requests.get(GAS_URL, params={"action": action, "code": code, "type": list_type, "price": price}, timeout=2)
+def update_cloud_remove(code, list_type, user):
+    try: requests.get(GAS_URL, params={"action": "remove", "code": code, "type": list_type, "user": user}, timeout=2)
     except: pass
 
 def get_name(ticker):
@@ -167,73 +176,49 @@ def get_stock_data(ticker_list):
     except: pass
     return pd.DataFrame(data)
 
-@st.cache_data(ttl=300) # 5分鐘更新一次新聞
+@st.cache_data(ttl=300) 
 def fetch_and_filter_news(rss_urls):
     buckets = {key: [] for key in KEYWORD_MAPPING.keys()}
-    buckets["🌍 其他快訊"] = []
-    seen_titles = set()
+    buckets["🌍 其他頭條"] = []
+    seen = set()
     
     # 預設來源
-    default_rss = RSS_SOURCES
-    # 合併雲端來源 (如果有的話)
+    default_rss = [
+        "https://news.cnyes.com/rss/cat/headline", 
+        "https://news.cnyes.com/rss/cat/200",
+        "https://news.cnyes.com/rss/cat/hotai",
+        "https://finance.yahoo.com/news/rssindex"
+    ]
     if rss_urls: default_rss.extend(rss_urls)
 
     for url in default_rss:
         try:
             feed = feedparser.parse(url)
-            # 【關鍵修改】抓取數量提升到 80，確保新聞量暴增
+            # 抓取 80 則以確保新聞量充足
             for entry in feed.entries[:80]: 
                 title = entry.title
-                if title[:10] in seen_titles: continue
-                seen_titles.add(title[:10])
+                if title[:10] in seen: continue
+                seen.add(title[:10])
                 
                 if "yahoo" in url and sum(1 for c in title if '\u4e00' <= c <= '\u9fff') < len(title)*0.3:
                      try: title = GoogleTranslator(source='auto', target='zh-TW').translate(title)
                      except: pass
                 
-                item = {
-                    "title": title, "link": entry.link, 
-                    "date": entry.get('published', '')[:16], 
-                    "src": feed.feed.get('title', '快訊')
-                }
+                item = {"title": title, "link": entry.link, "date": entry.get('published', '')[:16], "src": feed.feed.get('title', '快訊')}
                 
                 matched = False
                 for category, keywords in KEYWORD_MAPPING.items():
                     if any(kw in title for kw in keywords):
-                        buckets[category].append(item)
-                        matched = True
-                        break 
-                
-                if not matched: buckets["🌍 其他快訊"].append(item)
+                        buckets[category].append(item); matched = True; break 
+                if not matched: buckets["🌍 其他頭條"].append(item)
         except: continue
     return buckets
 
-# --- 6. 介面佈局 ---
+# === 畫面呈現 ===
 
-# 側邊欄設定
-with st.sidebar:
-    st.header("⚙️ 管理員後台")
-    with st.expander("➕ 新增到【庫存股】"):
-        inv_code = st.text_input("代碼", key="add_inv", placeholder="如 2330.TW")
-        if st.button("加入庫存"):
-            update_cloud("add", inv_code.upper(), "inventory")
-            st.cache_data.clear(); st.rerun()
-    with st.expander("➕ 新增到【觀察名單】"):
-        watch_code = st.text_input("代碼", key="add_watch", placeholder="如 2603.TW")
-        if st.button("加入觀察"):
-            update_cloud("add", watch_code.upper(), "watchlist")
-            st.cache_data.clear(); st.rerun()
-    with st.expander("📰 新增【新聞頻道】"):
-        new_rss = st.text_input("網址或關鍵字(雅虎/鉅亨)")
-        if st.button("加入頻道"):
-            # 簡易處理，若輸入中文關鍵字需自行擴充 logic，這裡先假設輸入網址
-            # 若要支援前一版的中文映射，可將前一版的 MEDIA_PRESETS 邏輯加回來
-            update_cloud("add", new_rss, "news")
-            st.cache_data.clear(); st.rerun()
-
-# === 第一層：💰 媽媽的庫存 (6欄) ===
-st.subheader("💰 媽媽的庫存")
-inv_list = get_list_from_cloud("inventory")
+# 1. 庫存區
+st.subheader(f"💰 {current_user} 的庫存")
+inv_list = get_list_from_cloud("inventory", current_user)
 if inv_list:
     df = get_stock_data(inv_list)
     cols = st.columns(6)
@@ -245,22 +230,26 @@ if inv_list:
                 <div class="compact-price" style="color:{row['color']}">{row['price']}</div>
                 <div style="font-size:12px; font-weight:bold; color:{row['color']}">{row['sign']} {row['pct']}</div>
             </div>""", unsafe_allow_html=True)
-            if st.button("✖", key=f"d_{row['code']}"): update_cloud("remove", row['full_code'], "inventory"); st.rerun()
+            if st.button("✖", key=f"d_{row['code']}"): 
+                update_cloud_remove(row['full_code'], "inventory", current_user)
+                st.cache_data.clear(); st.rerun()
+else:
+    st.info("目前清單是空的，請從側邊欄加入股票。")
 
-# === 第二層：👀 有興趣的股票 (6欄) ===
-st.subheader("👀 有興趣的股票")
-watch_list = get_list_from_cloud("watchlist")
+# 2. 觀察區
+st.subheader(f"👀 {current_user} 的觀察名單")
+watch_list = get_list_from_cloud("watchlist", current_user)
 if watch_list:
     df_w = get_stock_data(watch_list)
     cols2 = st.columns(6)
     for i, row in df_w.iterrows():
         with cols2[i%6]:
             st.markdown(f"""<div class="compact-card"><div class="compact-name">{row['name']}</div><div class="compact-price" style="color:{row['color']}">{row['price']}</div></div>""", unsafe_allow_html=True)
-            if st.button("✖", key=f"dw_{row['code']}"): update_cloud("remove", row['full_code'], "watchlist"); st.rerun()
-else:
-    st.info("請從側邊欄新增觀察名單")
+            if st.button("✖", key=f"dw_{row['code']}"): 
+                update_cloud_remove(row['full_code'], "watchlist", current_user)
+                st.cache_data.clear(); st.rerun()
 
-# === 第三層：🏆 市場熱門戰情室 ===
+# 3. 熱門區 (共用)
 st.markdown("---")
 st.subheader("🏆 市場熱門戰情室")
 hot_cols = st.columns(3)
@@ -276,25 +265,19 @@ for title, tickers in HOT_LISTS.items():
         st.markdown(html, unsafe_allow_html=True)
     idx += 1
 
-# === 第四層：📰 自動分類產業新聞 (海量緊密版) ===
+# 4. 新聞區 (傳入 user 參數)
 st.markdown("---")
-st.subheader("🗞️ 產業新聞快遞 (海量速報)")
+st.subheader("🗞️ 產業新聞快遞")
+user_rss = get_list_from_cloud("news", current_user)
+with st.spinner("正在搜尋最新新聞..."):
+    news_buckets = fetch_and_filter_news(user_rss)
 
-# 抓取雲端新聞源
-custom_rss = get_list_from_cloud("news")
-
-with st.spinner("正在為媽媽掃描全台財經新聞網..."):
-    news_buckets = fetch_and_filter_news(custom_rss)
-
-display_order = ["🤖 AI 與半導體", "🏗️ 鋼鐵與水泥", "🚢 航運與運輸", "🚗 汽車與供應鏈", "💰 金融與銀行", "⚡ 重電與綠能", "💊 生技與防疫", "🏠 營建與房產", "🌍 其他快訊"]
+display_order = ["🤖 AI 與半導體", "🏗️ 鋼鐵與水泥", "🚢 航運與運輸", "🚗 汽車與供應鏈", "💰 金融與銀行", "⚡ 重電與綠能", "💊 生技與防疫", "🏠 營建與房產", "🌍 其他頭條"]
 
 for category in display_order:
     items = news_buckets.get(category, [])
     if items:
         st.markdown(f'<div class="news-category-header">{category} ({len(items)})</div>', unsafe_allow_html=True)
-        
-        # 顯示該類別的新聞，不限數量，但用 Scroll bar 或直接長列表
-        # 這裡使用簡單的長列表，因為媽媽喜歡滑手機
         for n in items: 
             st.markdown(f"""
             <div class="news-item-compact">
