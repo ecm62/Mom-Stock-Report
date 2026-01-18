@@ -7,10 +7,10 @@ from deep_translator import GoogleTranslator
 from datetime import datetime
 
 # --- 1. 頁面設定 ---
-st.set_page_config(layout="wide", page_title="阿美的股海決策報", initial_sidebar_state="collapsed")
+st.set_page_config(layout="wide", page_title="阿美的股海顧問", initial_sidebar_state="collapsed")
 
-# --- 2. 您的 GAS API (請確認這是您的正確網址) ---
-GAS_URL = "https://script.google.com/macros/library/d/1dOn69U1V5kqsde1kwg0SCdkU1ww694ahWUNhktSKZc08fi_wKiB1-IJI/1"
+# --- 2. 您的 GAS API (已更新為您提供的正確網址) ---
+GAS_URL = "https://script.google.com/macros/s/AKfycbwTsM79MMdedizvIcIn7tgwT81VIhj87WM-bvR45QgmMIUsIemmyR_FzMvG3v5LEHEvPw/exec"
 
 # --- 3. CSS 優化 (字體加大、手機好讀) ---
 st.markdown("""
@@ -77,21 +77,20 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("👵 阿美的股海決策報")
+st.title("👵 阿美的股海顧問")
 st.caption(f"全方位戰情版 | 更新：{datetime.now().strftime('%H:%M')}")
 
 # --- 4. 資料庫設定 ---
 
-# (A) 新聞 RSS 來源 (選用台灣最穩定的財經源，涵蓋 Yahoo 新聞內容)
+# (A) 新聞 RSS 來源
 RSS_SOURCES = [
-    "https://news.cnyes.com/rss/cat/200", # 鉅亨台股 (量大)
+    "https://news.cnyes.com/rss/cat/200", # 鉅亨台股
     "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money", # 聯合財經
     "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml", # MoneyDJ
-    "https://finance.yahoo.com/news/rssindex" # Yahoo 美股 (輔助)
+    "https://finance.yahoo.com/news/rssindex" # Yahoo 美股
 ]
 
-# (B) 詳細分類關鍵字 (依照您的 Yahoo 分類表建立)
-# 這裡定義三大類，程式會自動拿新聞標題去比對這些關鍵字
+# (B) 詳細分類關鍵字
 KEYWORD_MAPPING = {
     "📊 上市類股": {
         "半導體/電子": ["台積電", "聯發科", "聯電", "半導體", "晶圓", "IC", "電子"],
@@ -118,7 +117,7 @@ KEYWORD_MAPPING = {
     }
 }
 
-# (C) 熱門榜單 (PChome 風格)
+# (C) 熱門榜單
 HOT_LISTS = {
     "🔥 熱門討論股": ["2330.TW", "2317.TW", "3231.TW", "2382.TW", "2603.TW", "2609.TW"], 
     "💎 人氣 ETF": ["00878.TW", "0056.TW", "0050.TW", "00919.TW", "00929.TW", "00940.TW"], 
@@ -180,25 +179,22 @@ def get_stock_data(ticker_list):
 
 @st.cache_data(ttl=1800)
 def fetch_news_waterfall():
-    # 建立分類桶
     buckets = {
         "📊 上市類股": [], 
         "💡 概念股": [], 
         "🏢 集團股": [],
         "🌍 其他快訊": []
     }
-    
     seen_titles = set()
     
     for url in RSS_SOURCES:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:20]: # 增加抓取量
+            for entry in feed.entries[:20]:
                 title = entry.title
                 if title[:10] in seen_titles: continue
                 seen_titles.add(title[:10])
                 
-                # 簡單翻譯英文標題
                 if "yahoo" in url and sum(1 for c in title if '\u4e00' <= c <= '\u9fff') < len(title)*0.3:
                      try: title = GoogleTranslator(source='auto', target='zh-TW').translate(title)
                      except: pass
@@ -209,45 +205,26 @@ def fetch_news_waterfall():
                     "src": feed.feed.get('title', '快訊')
                 }
                 
-                # 進行多重分類 (一則新聞可能屬於多個分類)
                 matched = False
-                
-                # 1. 檢查上市類股
+                # 依序檢查三大分類
                 for sub, kws in KEYWORD_MAPPING["📊 上市類股"].items():
                     if any(kw in title for kw in kws):
-                        item_copy = item.copy()
-                        item_copy["tag"] = sub
-                        buckets["📊 上市類股"].append(item_copy)
-                        matched = True
-                        break # 同一大類只歸一次
-                
-                # 2. 檢查概念股
-                for sub, kws in KEYWORD_MAPPING["💡 概念股"].items():
-                    if any(kw in title for kw in kws):
-                        item_copy = item.copy()
-                        item_copy["tag"] = sub
-                        buckets["💡 概念股"].append(item_copy)
-                        matched = True
-                        break
-                
-                # 3. 檢查集團股
-                for sub, kws in KEYWORD_MAPPING["🏢 集團股"].items():
-                    if any(kw in title for kw in kws):
-                        item_copy = item.copy()
-                        item_copy["tag"] = sub
-                        buckets["🏢 集團股"].append(item_copy)
-                        matched = True
-                        break
-                
+                        item_copy = item.copy(); item_copy["tag"] = sub; buckets["📊 上市類股"].append(item_copy); matched = True; break 
                 if not matched:
-                    buckets["🌍 其他快訊"].append(item)
-                    
+                    for sub, kws in KEYWORD_MAPPING["💡 概念股"].items():
+                        if any(kw in title for kw in kws):
+                            item_copy = item.copy(); item_copy["tag"] = sub; buckets["💡 概念股"].append(item_copy); matched = True; break
+                if not matched:
+                    for sub, kws in KEYWORD_MAPPING["🏢 集團股"].items():
+                        if any(kw in title for kw in kws):
+                            item_copy = item.copy(); item_copy["tag"] = sub; buckets["🏢 集團股"].append(item_copy); matched = True; break
+                
+                if not matched: buckets["🌍 其他快訊"].append(item)
         except: continue
     return buckets
 
 # --- 6. 介面佈局 ---
 
-# 側邊欄設定
 with st.sidebar:
     st.header("⚙️ 股票管理")
     with st.expander("➕ 新增到【庫存股】"):
@@ -262,7 +239,7 @@ with st.sidebar:
             st.cache_data.clear(); st.rerun()
     if st.button("🔄 強制更新"): st.cache_data.clear(); st.rerun()
 
-# === 第一層：💰 媽媽的庫存 (最優先) ===
+# === 第一層：💰 媽媽的庫存 ===
 c1, c2 = st.columns([3, 1])
 with c1: st.subheader("💰 媽媽的庫存")
 with c2: 
@@ -295,7 +272,7 @@ if watch_list:
 else:
     st.info("目前沒有觀察名單，請從左側新增。")
 
-# === 第三層：🏆 市場熱門戰情室 (PChome 風格) ===
+# === 第三層：🏆 市場熱門戰情室 ===
 st.markdown("---")
 st.subheader("🏆 市場熱門戰情室")
 
@@ -316,11 +293,10 @@ for title, tickers in HOT_LISTS.items():
         st.markdown(html, unsafe_allow_html=True)
     idx += 1
 
-# === 第四層：📰 產業新聞瀑布流 (Yahoo 分類) ===
+# === 第四層：📰 產業新聞瀑布流 ===
 st.markdown("---")
 st.subheader("🗞️ 產業新聞快遞 (Yahoo 分類)")
 
-# 快速連結 Launcher
 st.markdown("""
 <div style="overflow-x:auto; white-space:nowrap; padding-bottom:10px;">
 <a href="https://tw.stock.yahoo.com/class" target="_blank" style="padding:5px 10px; background:#eee; border-radius:15px; text-decoration:none; margin-right:5px; font-size:14px;">Yahoo類股 ↗</a>
@@ -331,14 +307,12 @@ st.markdown("""
 with st.spinner("正在為媽媽整理新聞..."):
     news_buckets = fetch_news_waterfall()
 
-# 依序顯示三大類
 cats_order = ["📊 上市類股", "💡 概念股", "🏢 集團股", "🌍 其他快訊"]
 
 for cat in cats_order:
     items = news_buckets.get(cat, [])
     if items:
         st.markdown(f'<div class="news-category-header">{cat}</div>', unsafe_allow_html=True)
-        # 只顯示前 8 則避免過長
         for n in items[:8]:
             tag_html = f'<span class="news-tag">{n["tag"]}</span>' if "tag" in n else ""
             st.markdown(f"""
