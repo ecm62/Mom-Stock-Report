@@ -7,24 +7,68 @@ from deep_translator import GoogleTranslator
 from datetime import datetime, timedelta, timezone
 from streamlit_autorefresh import st_autorefresh
 
-# --- 1. 頁面設定 ---
+# --- 1. 頁面與時區設定 ---
 st.set_page_config(layout="wide", page_title="阿美的股海顧問", initial_sidebar_state="collapsed")
+
+# 設定每 5 分鐘自動刷新
 st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh")
 
+# 定義台灣時區
 TW_TZ = timezone(timedelta(hours=8))
 def get_tw_time():
     return datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M')
 
-# --- 2. GAS API ---
+# --- 2. GAS API (已更新) ---
 GAS_URL = "https://script.google.com/macros/s/AKfycbwTsM79MMdedizvIcIn7tgwT81VIhj87WM-bvR45QgmMIUsIemmyR_FzMvG3v5LEHEvPw/exec"
 
-# --- 3. Session 初始化 ---
+# --- 3. 媒體與 CSS 設定 ---
+MEDIA_PRESETS = {
+    "雅虎": "https://finance.yahoo.com/news/rssindex", "鉅亨": "https://news.cnyes.com/rss/cat/headline",
+    "聯合": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money", "經濟": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
+    "moneydj": "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml", "商周": "https://www.businessweekly.com.tw/rss/latest",
+    "科技": "https://technews.tw/feed/"
+}
+
+# 修復 CSS 縮排問題，確保不會變成原始碼顯示
+st.markdown("""
+<style>
+html, body, [class*="css"] { font-family: "Microsoft JhengHei", sans-serif; }
+/* 股票卡片 */
+.compact-card { border: 1px solid #ddd; border-radius: 6px; padding: 5px 2px; text-align: center; background: white; margin-bottom: 5px; box-shadow: 1px 1px 2px rgba(0,0,0,0.1); min-height: 80px; }
+.compact-name { font-size: 15px !important; font-weight: 900; color: #333; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.compact-price { font-size: 18px !important; font-weight: bold; margin: 0;}
+
+/* 新聞樣式 */
+.news-category-header { background-color: #e3f2fd; color: #0d47a1; padding: 8px 12px; border-left: 6px solid #0d47a1; font-size: 20px !important; font-weight: 900; margin-top: 20px; margin-bottom: 5px; border-radius: 4px; }
+.news-item-compact { padding: 6px 0; border-bottom: 1px dashed #ccc; line-height: 1.3; }
+.news-link-text { text-decoration: none; color: #222; font-size: 18px !important; font-weight: 600; display: block; }
+.news-link-text:hover { color: #d32f2f; }
+.news-meta-compact { font-size: 12px; color: #666; margin-top: 2px;}
+
+/* 熱門榜 */
+.rank-title { font-size: 18px; font-weight: 900; color: #fff; background: linear-gradient(90deg, #d32f2f, #ef5350); padding: 8px; border-radius: 5px 5px 0 0; margin-top: 15px; text-align: center; }
+.rank-box { border: 1px solid #ef5350; border-top: none; border-radius: 0 0 5px 5px; padding: 5px; background: #fff; margin-bottom: 15px; }
+.rank-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 5px; border-bottom: 1px dashed #eee; }
+.rank-name { font-size: 16px; font-weight: bold; color: #333; }
+
+/* 按鈕 */
+.stButton > button { width: 100%; border-radius: 8px; font-weight: bold; font-size: 18px;}
+div[data-testid="column"] { padding: 0 2px !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# --- 4. 使用者系統 ---
+query_params = st.query_params
+url_user = query_params.get("user", "")
+url_pass = query_params.get("password", "")
+
+# 初始化 Session
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'user_name' not in st.session_state:
     st.session_state['user_name'] = ""
 
-# --- 4. 驗證邏輯 ---
+# 驗證函數
 def verify_user(username, password):
     try:
         response = requests.get(GAS_URL, params={"action": "login", "user": username, "password": password}, timeout=5)
@@ -38,12 +82,13 @@ def register_user(username, password):
         return response.json()
     except: return {"status": "error", "msg": "連線失敗"}
 
-# --- 5. 安全登入閘道 (修正版) ---
+# 自動登入檢查
+if not st.session_state['logged_in'] and url_user and url_pass:
+    if verify_user(url_user, url_pass):
+        st.session_state['logged_in'] = True
+        st.session_state['user_name'] = url_user
 
-# 1. 檢查網址是否有 "user" 參數 (只帶帳號，不帶密碼)
-query_params = st.query_params
-url_user = query_params.get("user", "")
-
+# 登入閘道
 if not st.session_state['logged_in']:
     st.title("🔐 歡迎來到股海顧問")
     st.caption("請登入以存取您的專屬資料")
@@ -51,23 +96,18 @@ if not st.session_state['logged_in']:
     tab1, tab2 = st.tabs(["🔑 登入", "📝 註冊"])
     
     with tab1:
-        # 使用 form，讓瀏覽器能識別這是登入表單，進而觸發「記住密碼」功能
         with st.form("login_form"):
-            # 如果網址有帶 user，自動填入；否則留空
             user_in = st.text_input("帳號", value=url_user)
             pass_in = st.text_input("密碼", type="password")
-            
             submitted = st.form_submit_button("登入", type="primary")
-            
             if submitted:
                 if verify_user(user_in, pass_in):
                     st.session_state['logged_in'] = True
                     st.session_state['user_name'] = user_in
-                    # 登入成功後，更新網址參數 (方便下次自動填入帳號)
                     st.query_params["user"] = user_in
                     st.rerun()
                 else:
-                    st.error("帳號或密碼錯誤")
+                    st.error("帳號或密碼錯誤 (請確認 GAS 是否已部署新版本)")
     
     with tab2:
         with st.form("signup_form"):
@@ -80,41 +120,19 @@ if not st.session_state['logged_in']:
                     st.success("註冊成功！請切換到登入頁籤登入。")
                 else:
                     st.error(f"註冊失敗：{res.get('msg')}")
-    
-    st.stop() 
+    st.stop()
 
 # =========================================================
-# 主程式 (登入後可見)
+# 主程式 (登入後)
 # =========================================================
 
 current_user = st.session_state['user_name']
-
-# CSS 美化
-st.markdown("""
-    <style>
-    html, body, [class*="css"] { font-family: "Microsoft JhengHei", sans-serif; }
-    .compact-card { border: 1px solid #ddd; border-radius: 6px; padding: 5px 2px; text-align: center; background: white; margin-bottom: 5px; box-shadow: 1px 1px 2px rgba(0,0,0,0.1); min-height: 80px; }
-    .compact-name { font-size: 15px !important; font-weight: 900; color: #333; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-    .compact-price { font-size: 18px !important; font-weight: bold; margin: 0;}
-    .news-category-header { background-color: #e3f2fd; color: #0d47a1; padding: 8px 12px; border-left: 6px solid #0d47a1; font-size: 20px !important; font-weight: 900; margin-top: 20px; margin-bottom: 5px; border-radius: 4px; }
-    .news-item-compact { padding: 6px 0; border-bottom: 1px dashed #ccc; line-height: 1.3; }
-    .news-link-text { text-decoration: none; color: #222; font-size: 18px !important; font-weight: 600; display: block; }
-    .news-link-text:hover { color: #d32f2f; }
-    .news-meta-compact { font-size: 12px; color: #666; margin-top: 2px;}
-    .rank-title { font-size: 18px; font-weight: 900; color: #fff; background: linear-gradient(90deg, #d32f2f, #ef5350); padding: 8px; border-radius: 5px 5px 0 0; margin-top: 15px; text-align: center; }
-    .rank-box { border: 1px solid #ef5350; border-top: none; border-radius: 0 0 5px 5px; padding: 5px; background: #fff; margin-bottom: 15px; }
-    .rank-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 5px; border-bottom: 1px dashed #eee; }
-    .rank-name { font-size: 16px; font-weight: bold; color: #333; }
-    .stButton > button { width: 100%; border-radius: 8px; font-weight: bold; font-size: 18px;}
-    div[data-testid="column"] { padding: 0 2px !important; }
-    </style>
-    """, unsafe_allow_html=True)
 
 # 側邊欄
 with st.sidebar:
     st.header(f"👤 {current_user}")
     
-    # 顯示分享連結 (只含帳號，不含密碼)
+    # 產生不含密碼的分享連結
     my_link = f"?user={current_user}"
     with st.expander("🔗 取得分享連結"):
         st.caption("將此連結分享給朋友，對方只需輸入密碼即可登入。")
@@ -122,6 +140,7 @@ with st.sidebar:
 
     if st.button("登出"):
         st.session_state['logged_in'] = False
+        st.query_params.clear()
         st.rerun()
     st.divider()
 
@@ -141,12 +160,6 @@ with st.sidebar:
             st.cache_data.clear(); st.rerun()
 
     with st.expander("📰 新增【新聞頻道】"):
-        MEDIA_PRESETS = {
-            "雅虎": "https://finance.yahoo.com/news/rssindex", "鉅亨": "https://news.cnyes.com/rss/cat/headline",
-            "聯合": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money", "經濟": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
-            "moneydj": "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml", "商周": "https://www.businessweekly.com.tw/rss/latest",
-            "科技": "https://technews.tw/feed/"
-        }
         new_rss = st.text_input("輸入「鉅亨」或網址", key="rss_in")
         if st.button("加入頻道"):
             url = new_rss
@@ -234,13 +247,12 @@ def fetch_and_filter_news(user_rss_urls):
     buckets["🌍 其他頭條"] = []
     seen = set()
     
-    # 強大內建 + 使用者自訂
     default_rss = [
         "https://news.cnyes.com/rss/cat/headline", 
         "https://news.cnyes.com/rss/cat/200",
         "https://news.cnyes.com/rss/cat/hotai",
-        "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
         "https://finance.yahoo.com/news/rssindex",
+        "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
         "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml",
         "https://technews.tw/feed/"
     ]
@@ -310,6 +322,7 @@ for title, tickers in HOT_LISTS.items():
     with hot_cols[idx]:
         st.markdown(f'<div class="rank-title">{title}</div>', unsafe_allow_html=True)
         df_hot = get_stock_data(tickers)
+        # 修復 HTML 結構，移除縮排以避免被當成 Code block
         html = '<div class="rank-box">'
         for _, row in df_hot.iterrows():
             html += f"""<div class="rank-row"><span class="rank-name">{row['name']}</span><span class="rank-price" style="color:{row['color']}">{row['sign']} {row['price']}</span></div>"""
