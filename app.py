@@ -9,16 +9,14 @@ from streamlit_autorefresh import st_autorefresh
 
 # --- 1. 頁面與時區設定 ---
 st.set_page_config(layout="wide", page_title="阿美的股海顧問", initial_sidebar_state="collapsed")
-
-# 設定每 5 分鐘自動刷新
 st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh")
 
-# 定義台灣時區
 TW_TZ = timezone(timedelta(hours=8))
 def get_tw_time():
     return datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M')
 
-# --- 2. GAS API (已更新) ---
+# --- 2. GAS API ---
+# 請確認這是否為您最新部署 (有選「建立新版本」) 的網址
 GAS_URL = "https://script.google.com/macros/s/AKfycbwTsM79MMdedizvIcIn7tgwT81VIhj87WM-bvR45QgmMIUsIemmyR_FzMvG3v5LEHEvPw/exec"
 
 # --- 3. 媒體與 CSS 設定 ---
@@ -29,46 +27,35 @@ MEDIA_PRESETS = {
     "科技": "https://technews.tw/feed/"
 }
 
-# 修復 CSS 縮排問題，確保不會變成原始碼顯示
+# 修復 CSS 格式，避免顯示亂碼
 st.markdown("""
 <style>
 html, body, [class*="css"] { font-family: "Microsoft JhengHei", sans-serif; }
-/* 股票卡片 */
 .compact-card { border: 1px solid #ddd; border-radius: 6px; padding: 5px 2px; text-align: center; background: white; margin-bottom: 5px; box-shadow: 1px 1px 2px rgba(0,0,0,0.1); min-height: 80px; }
 .compact-name { font-size: 15px !important; font-weight: 900; color: #333; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 .compact-price { font-size: 18px !important; font-weight: bold; margin: 0;}
-
-/* 新聞樣式 */
 .news-category-header { background-color: #e3f2fd; color: #0d47a1; padding: 8px 12px; border-left: 6px solid #0d47a1; font-size: 20px !important; font-weight: 900; margin-top: 20px; margin-bottom: 5px; border-radius: 4px; }
 .news-item-compact { padding: 6px 0; border-bottom: 1px dashed #ccc; line-height: 1.3; }
 .news-link-text { text-decoration: none; color: #222; font-size: 18px !important; font-weight: 600; display: block; }
 .news-link-text:hover { color: #d32f2f; }
 .news-meta-compact { font-size: 12px; color: #666; margin-top: 2px;}
-
-/* 熱門榜 */
 .rank-title { font-size: 18px; font-weight: 900; color: #fff; background: linear-gradient(90deg, #d32f2f, #ef5350); padding: 8px; border-radius: 5px 5px 0 0; margin-top: 15px; text-align: center; }
 .rank-box { border: 1px solid #ef5350; border-top: none; border-radius: 0 0 5px 5px; padding: 5px; background: #fff; margin-bottom: 15px; }
 .rank-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 5px; border-bottom: 1px dashed #eee; }
 .rank-name { font-size: 16px; font-weight: bold; color: #333; }
-
-/* 按鈕 */
 .stButton > button { width: 100%; border-radius: 8px; font-weight: bold; font-size: 18px;}
 div[data-testid="column"] { padding: 0 2px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. 使用者系統 ---
+# --- 4. 登入邏輯 (含自動登入) ---
 query_params = st.query_params
 url_user = query_params.get("user", "")
 url_pass = query_params.get("password", "")
 
-# 初始化 Session
-if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
-if 'user_name' not in st.session_state:
-    st.session_state['user_name'] = ""
+if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
+if 'user_name' not in st.session_state: st.session_state['user_name'] = ""
 
-# 驗證函數
 def verify_user(username, password):
     try:
         response = requests.get(GAS_URL, params={"action": "login", "user": username, "password": password}, timeout=5)
@@ -82,13 +69,13 @@ def register_user(username, password):
         return response.json()
     except: return {"status": "error", "msg": "連線失敗"}
 
-# 自動登入檢查
+# 自動登入嘗試
 if not st.session_state['logged_in'] and url_user and url_pass:
     if verify_user(url_user, url_pass):
         st.session_state['logged_in'] = True
         st.session_state['user_name'] = url_user
 
-# 登入閘道
+# 登入閘道 UI
 if not st.session_state['logged_in']:
     st.title("🔐 歡迎來到股海顧問")
     st.caption("請登入以存取您的專屬資料")
@@ -107,7 +94,7 @@ if not st.session_state['logged_in']:
                     st.query_params["user"] = user_in
                     st.rerun()
                 else:
-                    st.error("帳號或密碼錯誤 (請確認 GAS 是否已部署新版本)")
+                    st.error("帳號或密碼錯誤 (請確認 GAS 是否已發布為『新版本』)")
     
     with tab2:
         with st.form("signup_form"):
@@ -123,7 +110,7 @@ if not st.session_state['logged_in']:
     st.stop()
 
 # =========================================================
-# 主程式 (登入後)
+# 主程式
 # =========================================================
 
 current_user = st.session_state['user_name']
@@ -132,10 +119,9 @@ current_user = st.session_state['user_name']
 with st.sidebar:
     st.header(f"👤 {current_user}")
     
-    # 產生不含密碼的分享連結
     my_link = f"?user={current_user}"
     with st.expander("🔗 取得分享連結"):
-        st.caption("將此連結分享給朋友，對方只需輸入密碼即可登入。")
+        st.caption("分享此連結給朋友 (對方需輸入密碼)")
         st.code(f"https://share.streamlit.io/...(您的網址)...{my_link}", language="text")
 
     if st.button("登出"):
@@ -182,7 +168,6 @@ with c_btn:
         st.rerun()
 
 # --- 資料處理函數 ---
-
 KEYWORD_MAPPING = {
     "🤖 AI 與半導體": ["台積電", "聯電", "聯發科", "日月光", "AI", "半導體", "晶圓", "輝達", "NVIDIA", "CoWoS", "先進封裝", "伺服器", "緯創", "廣達", "技嘉", "智原", "世芯", "創意"],
     "🏗️ 鋼鐵與水泥": ["中鋼", "中鴻", "大成鋼", "鋼鐵", "台泥", "亞泥", "水泥", "玻陶", "豐興", "鋼價", "基建", "春雨", "燁輝"],
@@ -216,6 +201,7 @@ def get_name(ticker):
     code = ticker.split(".")[0]
     return STOCK_MAP.get(code, code)
 
+# 修復語法錯誤：確保變數名稱與邏輯正確
 def get_stock_data(ticker_list):
     if not ticker_list: return pd.DataFrame()
     valid = [t for t in ticker_list if t.strip()]
@@ -322,7 +308,6 @@ for title, tickers in HOT_LISTS.items():
     with hot_cols[idx]:
         st.markdown(f'<div class="rank-title">{title}</div>', unsafe_allow_html=True)
         df_hot = get_stock_data(tickers)
-        # 修復 HTML 結構，移除縮排以避免被當成 Code block
         html = '<div class="rank-box">'
         for _, row in df_hot.iterrows():
             html += f"""<div class="rank-row"><span class="rank-name">{row['name']}</span><span class="rank-price" style="color:{row['color']}">{row['sign']} {row['price']}</span></div>"""
