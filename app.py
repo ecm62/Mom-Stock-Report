@@ -7,88 +7,122 @@ from deep_translator import GoogleTranslator
 from datetime import datetime
 
 # --- 1. 頁面設定 ---
-st.set_page_config(layout="wide", page_title="阿美的股海決策報", initial_sidebar_state="collapsed")
+st.set_page_config(layout="wide", page_title="阿美的股海顧問", initial_sidebar_state="collapsed")
 
-# --- 2. 您的 GAS API ---
+# --- 2. 您的 GAS API (請確認這是您的正確網址) ---
 GAS_URL = "https://script.google.com/macros/library/d/1dOn69U1V5kqsde1kwg0SCdkU1ww694ahWUNhktSKZc08fi_wKiB1-IJI/1"
 
-# --- 3. CSS 優化 (PChome 風格榜單) ---
+# --- 3. CSS 優化 (字體加大、手機好讀) ---
 st.markdown("""
     <style>
     html, body, [class*="css"] { font-family: "Microsoft JhengHei", sans-serif; }
     
-    /* PChome 風格榜單標題 */
+    /* 股票卡片 */
+    .compact-card {
+        border: 1px solid #ddd; border-radius: 8px;
+        padding: 10px 5px; text-align: center;
+        background: white; margin-bottom: 5px;
+        box-shadow: 1px 1px 3px rgba(0,0,0,0.1);
+    }
+    .compact-name { font-size: 18px !important; font-weight: 900; color: #333; margin: 0; line-height: 1.2;}
+    .compact-price { font-size: 26px !important; font-weight: bold; margin: 0; line-height: 1.2;}
+    .compact-change { font-size: 16px !important; font-weight: bold; }
+    
+    /* PChome 風格榜單 */
     .rank-title {
-        font-size: 20px; font-weight: 900; color: #fff;
-        background: linear-gradient(90deg, #d32f2f, #e57373);
-        padding: 8px 15px; border-radius: 5px 5px 0 0;
-        margin-top: 10px; text-align: center;
+        font-size: 18px; font-weight: 900; color: #fff;
+        background: linear-gradient(90deg, #d32f2f, #ef5350);
+        padding: 8px; border-radius: 5px 5px 0 0;
+        margin-top: 15px; text-align: center;
     }
     .rank-box {
-        border: 2px solid #e57373; border-top: none;
-        border-radius: 0 0 5px 5px; padding: 10px;
-        background: #fff; margin-bottom: 20px;
+        border: 1px solid #ef5350; border-top: none;
+        border-radius: 0 0 5px 5px; padding: 5px;
+        background: #fff; margin-bottom: 15px;
     }
-    
-    /* 緊湊型股票行 (榜單專用) */
     .rank-row {
         display: flex; justify-content: space-between; align-items: center;
-        padding: 8px 0; border-bottom: 1px dashed #eee;
+        padding: 8px 5px; border-bottom: 1px dashed #eee;
     }
-    .rank-name { font-size: 18px; font-weight: bold; color: #333; }
-    .rank-price { font-size: 20px; font-weight: bold; }
+    .rank-name { font-size: 16px; font-weight: bold; color: #333; }
+    .rank-price { font-size: 16px; font-weight: bold; }
+
+    /* Yahoo 風格新聞分類標題 */
+    .news-category-header {
+        background-color: #f1f8ff;
+        color: #1f4e78;
+        padding: 8px 12px;
+        border-left: 6px solid #1f4e78;
+        font-size: 20px !important;
+        font-weight: 900;
+        margin-top: 25px;
+        margin-bottom: 10px;
+    }
     
-    /* 一般股票小卡片 */
-    .compact-card {
-        border: 1px solid #eee; border-radius: 10px;
-        padding: 12px 5px; text-align: center;
-        background: white; margin-bottom: 8px;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
-    }
-    .compact-name { font-size: 20px !important; font-weight: 900; color: #333; margin: 0; line-height: 1.2;}
-    .compact-price { font-size: 26px !important; font-weight: bold; margin: 0; line-height: 1.2;}
-    
-    /* 新聞區塊 */
-    .news-section-title {
-        background-color: #f8f9fa; color: #2c3e50;
-        padding: 12px 15px; border-left: 8px solid #E74C3C;
-        font-size: 24px !important; font-weight: 900;
-        margin-top: 30px; margin-bottom: 15px;
-    }
+    /* 新聞項目 */
+    .news-item { padding: 12px 0; border-bottom: 1px solid #eee; }
     .news-link {
-        text-decoration: none; color: #2E86C1;
-        font-size: 22px; font-weight: 700;
-        display: block; margin-bottom: 8px;
+        text-decoration: none; color: #222;
+        font-size: 20px; font-weight: 600;
+        line-height: 1.4; display: block; margin-bottom: 6px;
+    }
+    .news-link:hover { color: #2E86C1; }
+    .news-meta { font-size: 13px; color: #888; }
+    .news-tag {
+        display: inline-block; background: #eee; color: #555;
+        font-size: 12px; padding: 2px 6px; border-radius: 4px; margin-right: 5px;
     }
     
-    div[data-testid="column"] { padding: 0 5px !important; }
+    div[data-testid="column"] { padding: 0 3px !important; }
     </style>
     """, unsafe_allow_html=True)
 
 st.title("👵 阿美的股海決策報")
-st.caption(f"旗艦熱門榜單版 | 更新：{datetime.now().strftime('%H:%M')}")
+st.caption(f"全方位戰情版 | 更新：{datetime.now().strftime('%H:%M')}")
 
-# --- 4. 資料來源設定 ---
-# (A) 定義熱門榜單 (模仿 PChome 的選股邏輯)
-HOT_LISTS = {
-    "🔥 熱門討論股": ["2330.TW", "2317.TW", "3231.TW", "2382.TW", "2603.TW", "2609.TW"], # 台積,鴻海,緯創,廣達,長榮,陽明
-    "💎 台股人氣 ETF": ["00878.TW", "0056.TW", "0050.TW", "00919.TW", "00929.TW", "00940.TW"], # 高股息與市值型
-    "💡 熱門概念股": ["1519.TW", "1513.TW", "1503.TW", "2308.TW", "2454.TW", "6669.TW"] # 重電(華城,士電) & AI(台達電,聯發科,緯穎)
-}
+# --- 4. 資料庫設定 ---
 
+# (A) 新聞 RSS 來源 (選用台灣最穩定的財經源，涵蓋 Yahoo 新聞內容)
 RSS_SOURCES = [
-    "https://finance.yahoo.com/news/rssindex",
-    "https://news.cnyes.com/rss/cat/200",
-    "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
-    "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml"
+    "https://news.cnyes.com/rss/cat/200", # 鉅亨台股 (量大)
+    "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money", # 聯合財經
+    "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml", # MoneyDJ
+    "https://finance.yahoo.com/news/rssindex" # Yahoo 美股 (輔助)
 ]
 
-CATEGORY_KEYWORDS = {
-    "🔥 熱門電子": ["台積電", "聯電", "鴻海", "廣達", "緯創", "AI", "半導體", "輝達", "伺服器", "散熱"],
-    "🚢 航運/傳產": ["長榮", "陽明", "萬海", "航運", "航空", "台泥", "中鋼", "台塑", "紡織"],
-    "💰 金融/總經": ["金控", "銀行", "富邦", "國泰", "中信", "升息", "美元", "外資"],
-    "💡 概念/集團": ["蘋果", "iPhone", "電動車", "特斯拉", "重電", "綠能", "國巨", "元宇宙", "華城"],
-    "🏠 生活/營建": ["營建", "房市", "觀光", "王品", "統一", "生技"]
+# (B) 詳細分類關鍵字 (依照您的 Yahoo 分類表建立)
+# 這裡定義三大類，程式會自動拿新聞標題去比對這些關鍵字
+KEYWORD_MAPPING = {
+    "📊 上市類股": {
+        "半導體/電子": ["台積電", "聯發科", "聯電", "半導體", "晶圓", "IC", "電子"],
+        "電腦/光電": ["電腦", "廣達", "緯創", "光電", "面板", "友達", "群創", "技嘉", "華碩", "宏碁"],
+        "航運/運輸": ["長榮", "陽明", "萬海", "航運", "航空", "華航", "長榮航", "散裝"],
+        "金融/保險": ["金控", "銀行", "富邦", "國泰", "中信", "玉山", "元大", "金融"],
+        "水泥/鋼鐵/傳產": ["水泥", "台泥", "亞泥", "鋼鐵", "中鋼", "紡織", "塑膠", "台塑"],
+        "生技/營建": ["生技", "藥", "疫苗", "營建", "房市", "遠雄", "興富發"]
+    },
+    "💡 概念股": {
+        "AI/機器人": ["AI", "人工智慧", "機器人", "伺服器", "輝達", "NVIDIA", "散熱", "奇鋐"],
+        "蘋果供應鏈": ["蘋果", "Apple", "iPhone", "iPad", "鴻海", "大立光", "Type-C"],
+        "電動車/車電": ["電動車", "特斯拉", "Tesla", "電池", "充電樁", "裕隆", "鴻華", "ADAS"],
+        "綠能/重電": ["綠能", "風電", "太陽能", "儲能", "華城", "士電", "中興電"],
+        "元宇宙/網通": ["元宇宙", "VR", "宏達電", "網通", "智邦", "WiFi", "5G", "低軌衛星"]
+    },
+    "🏢 集團股": {
+        "台積電集團": ["台積電", "精材", "創意", "世界先進"],
+        "鴻海集團": ["鴻海", "鴻準", "群創", "樺漢", "工業富聯"],
+        "台塑集團": ["台塑", "南亞", "台化", "台塑化"],
+        "長榮集團": ["長榮", "榮運", "長榮航", "長榮鋼"],
+        "國泰/富邦集團": ["國泰金", "富邦金", "富邦媒"],
+        "聯華/遠東集團": ["聯華", "聯強", "遠東新", "遠傳"]
+    }
+}
+
+# (C) 熱門榜單 (PChome 風格)
+HOT_LISTS = {
+    "🔥 熱門討論股": ["2330.TW", "2317.TW", "3231.TW", "2382.TW", "2603.TW", "2609.TW"], 
+    "💎 人氣 ETF": ["00878.TW", "0056.TW", "0050.TW", "00919.TW", "00929.TW", "00940.TW"], 
+    "💡 熱門概念": ["1519.TW", "1513.TW", "2308.TW", "2454.TW", "6669.TW", "2376.TW"] 
 }
 
 STOCK_MAP = {
@@ -99,7 +133,8 @@ STOCK_MAP = {
     "8926": "台汽電", "2330": "台積電", "2317": "鴻海", "2603": "長榮", 
     "2609": "陽明", "2615": "萬海", "2454": "聯發科", "3231": "緯創",
     "0056": "元大高股息", "0050": "元大台灣50", "00919": "群益台灣精選", "00929": "復華科技優息",
-    "00940": "元大台灣價值", "1519": "華城", "1513": "中興電", "1503": "士電", "2382": "廣達", "6669": "緯穎"
+    "00940": "元大台灣價值", "1519": "華城", "1513": "中興電", "1503": "士電", "2382": "廣達", "6669": "緯穎",
+    "2376": "技嘉"
 }
 
 # --- 5. 核心函數 ---
@@ -119,139 +154,4 @@ def get_name(ticker):
     return STOCK_MAP.get(code, code)
 
 def get_stock_data(ticker_list):
-    if not ticker_list: return pd.DataFrame()
-    valid_tickers = [t for t in ticker_list if t.strip()]
-    if not valid_tickers: return pd.DataFrame()
-    data = []
-    try:
-        stocks = yf.Tickers(" ".join(valid_tickers))
-        for t in valid_tickers:
-            try:
-                info = stocks.tickers[t].history(period="5d")
-                if len(info) > 0:
-                    price = info['Close'].iloc[-1]
-                    prev = info['Close'].iloc[-2] if len(info) > 1 else price
-                    pct = ((price - prev) / prev) * 100
-                    color = "#e53935" if pct >= 0 else "#43a047" # 紅漲綠跌
-                    sign = "▲" if pct >= 0 else "▼"
-                    
-                    data.append({
-                        "name": get_name(t), "code": t.replace(".TW", "").replace(".TWO", ""),
-                        "full_code": t, "price": f"{price:.2f}",
-                        "pct": f"{pct:.2f}%", "color": color, "sign": sign
-                    })
-            except: continue
-    except: pass
-    return pd.DataFrame(data)
-
-@st.cache_data(ttl=1800)
-def fetch_news_waterfall():
-    buckets = {key: [] for key in CATEGORY_KEYWORDS.keys()}
-    buckets["🌍 其他焦點"] = []
-    seen = set()
-    for url in RSS_SOURCES:
-        try:
-            feed = feedparser.parse(url)
-            for entry in feed.entries[:15]:
-                title = entry.title
-                if title[:10] in seen: continue
-                seen.add(title[:10])
-                if "yahoo" in url and sum(1 for c in title if '\u4e00' <= c <= '\u9fff') < len(title)*0.3:
-                    try: title = GoogleTranslator(source='auto', target='zh-TW').translate(title)
-                    except: pass
-                item = {"title": title, "link": entry.link, "date": entry.get('published', '')[:16], "src": feed.feed.get('title', '快訊')}
-                matched = False
-                for cat, kws in CATEGORY_KEYWORDS.items():
-                    if any(kw in title for kw in kws):
-                        buckets[cat].append(item)
-                        matched = True; break
-                if not matched: buckets["🌍 其他焦點"].append(item)
-        except: continue
-    return buckets
-
-# --- 6. 介面佈局 ---
-
-with st.sidebar:
-    st.header("⚙️ 股票管理")
-    with st.expander("➕ 新增到【庫存股】"):
-        inv_code = st.text_input("代碼 (庫存)", key="inv", placeholder="如 2330.TW")
-        if st.button("加入庫存"):
-            update_cloud("add", inv_code.upper(), "inventory")
-            st.cache_data.clear(); st.rerun()
-    with st.expander("➕ 新增到【觀察名單】"):
-        watch_code = st.text_input("代碼 (觀察)", key="watch", placeholder="如 2603.TW")
-        if st.button("加入觀察"):
-            update_cloud("add", watch_code.upper(), "watchlist")
-            st.cache_data.clear(); st.rerun()
-    if st.button("🔄 強制更新"): st.cache_data.clear(); st.rerun()
-
-# === A. 庫存與觀察 (媽媽的私房區) ===
-c1, c2 = st.columns([3, 1])
-with c1: st.subheader("💰 媽媽的股票")
-with c2: 
-    if st.button("更新數據"): st.cache_data.clear(); st.rerun()
-
-# 庫存
-inv_list = get_list_from_cloud("inventory")
-if inv_list:
-    df = get_stock_data(inv_list)
-    cols = st.columns(3)
-    for i, row in df.iterrows():
-        with cols[i%3]:
-            st.markdown(f"""
-            <div class="compact-card" style="border-left: 5px solid {row['color']};">
-                <div style="font-size:16px;">{row['name']}</div>
-                <div class="compact-price" style="color:{row['color']}">{row['price']}</div>
-                <div style="font-weight:bold; color:{row['color']}">{row['sign']} {row['pct']}</div>
-            </div>""", unsafe_allow_html=True)
-            if st.button("✖", key=f"d_{row['code']}"): update_cloud("remove", row['full_code'], "inventory"); st.rerun()
-
-# 觀察
-st.caption("👀 有興趣的觀察股")
-watch_list = get_list_from_cloud("watchlist")
-if watch_list:
-    df_w = get_stock_data(watch_list)
-    cols2 = st.columns(3)
-    for i, row in df_w.iterrows():
-        with cols2[i%3]:
-            st.markdown(f"""<div class="compact-card"><div style="font-size:16px;">{row['name']}</div><div class="compact-price" style="color:{row['color']}">{row['price']}</div></div>""", unsafe_allow_html=True)
-            if st.button("✖", key=f"dw_{row['code']}"): update_cloud("remove", row['full_code'], "watchlist"); st.rerun()
-
-# === B. 🏆 市場熱門戰情室 (PChome 風格) ===
-st.markdown("---")
-st.subheader("🏆 市場熱門排行 (PChome 同步)")
-
-col_hot1, col_hot2, col_hot3 = st.columns(3)
-
-def render_hot_list(title, tickers):
-    st.markdown(f'<div class="rank-title">{title}</div>', unsafe_allow_html=True)
-    df = get_stock_data(tickers)
-    html_content = '<div class="rank-box">'
-    for _, row in df.iterrows():
-        html_content += f"""
-        <div class="rank-row">
-            <span class="rank-name">{row['name']} <span style="font-size:12px;color:#999">{row['code']}</span></span>
-            <span class="rank-price" style="color:{row['color']}">{row['sign']} {row['price']}</span>
-        </div>
-        """
-    html_content += '</div>'
-    st.markdown(html_content, unsafe_allow_html=True)
-
-with col_hot1: render_hot_list("🔥 熱門討論股", HOT_LISTS["🔥 熱門討論股"])
-with col_hot2: render_hot_list("💎 台股人氣 ETF", HOT_LISTS["💎 台股人氣 ETF"])
-with col_hot3: render_hot_list("💡 熱門概念股", HOT_LISTS["💡 熱門概念股"])
-
-# === C. 新聞瀑布流 ===
-st.markdown("---")
-with st.spinner("整理頭條中..."):
-    news_data = fetch_news_waterfall()
-
-cats = ["🔥 熱門電子", "🚢 航運/傳產", "💰 金融/總經", "💡 概念/集團", "🏠 生活/營建", "🌍 其他焦點"]
-for cat in cats:
-    items = news_data.get(cat, [])
-    if items:
-        st.markdown(f'<div class="news-section-title">{cat}</div>', unsafe_allow_html=True)
-        for n in items[:5]:
-            st.markdown(f"""<div style="padding:10px 0; border-bottom:1px solid #eee;"><a href="{n['link']}" target="_blank" class="news-link">{n['title']}</a><div style="color:#888;font-size:14px;">{n['src']} • {n['date']}</div></div>""", unsafe_allow_html=True)
-
-st.markdown("<br><br>", unsafe_allow_html=True)
+    if not ticker_
