@@ -5,36 +5,27 @@ import feedparser
 import requests
 from deep_translator import GoogleTranslator
 from datetime import datetime
-from streamlit_autorefresh import st_autorefresh  # 引入自動刷新套件
+from streamlit_autorefresh import st_autorefresh
 
-# --- 1. 頁面與自動更新設定 ---
+# --- 1. 頁面與自動更新 ---
 st.set_page_config(layout="wide", page_title="阿美的股海顧問", initial_sidebar_state="collapsed")
+st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh") # 5分鐘自動刷新
 
-# 【關鍵功能】設定每 5 分鐘 (300000毫秒) 自動刷新一次頁面
-st_autorefresh(interval=5 * 60 * 1000, key="auto_refresh")
-
-# --- 2. 您的 GAS API ---
+# --- 2. GAS API ---
 GAS_URL = "https://script.google.com/macros/s/AKfycbwTsM79MMdedizvIcIn7tgwT81VIhj87WM-bvR45QgmMIUsIemmyR_FzMvG3v5LEHEvPw/exec"
 
 # --- 3. 媒體關鍵字字典 ---
 MEDIA_PRESETS = {
     "雅虎": "https://finance.yahoo.com/news/rssindex",
-    "yahoo": "https://finance.yahoo.com/news/rssindex",
     "鉅亨": "https://news.cnyes.com/rss/cat/headline",
-    "cnyes": "https://news.cnyes.com/rss/cat/headline",
     "聯合": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
-    "經濟日報": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
-    "中時": "https://www.chinatimes.com/rss/260410.xml",
-    "工商": "https://www.chinatimes.com/rss/260410.xml",
-    "自由": "https://ec.ltn.com.tw/rss/all.xml",
+    "經濟": "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
     "moneydj": "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml",
     "商周": "https://www.businessweekly.com.tw/rss/latest",
-    "商業周刊": "https://www.businessweekly.com.tw/rss/latest",
-    "科技": "https://technews.tw/feed/",
-    "數位": "https://www.bnext.com.tw/rss"
+    "科技": "https://technews.tw/feed/"
 }
 
-# --- 4. CSS 優化 ---
+# --- 4. CSS 優化 (新聞標題連結化) ---
 st.markdown("""
     <style>
     html, body, [class*="css"] { font-family: "Microsoft JhengHei", sans-serif; }
@@ -47,10 +38,7 @@ st.markdown("""
         box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
         min-height: 85px;
     }
-    .compact-name { 
-        font-size: 15px !important; font-weight: 900; color: #333; margin: 0; line-height: 1.2; 
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
+    .compact-name { font-size: 15px !important; font-weight: 900; color: #333; margin: 0; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
     .compact-price { font-size: 18px !important; font-weight: bold; margin: 2px 0; line-height: 1.2;}
     
     /* PChome 風格榜單 */
@@ -65,70 +53,56 @@ st.markdown("""
         border-radius: 0 0 5px 5px; padding: 5px;
         background: #fff; margin-bottom: 15px;
     }
-    .rank-row {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 8px 5px; border-bottom: 1px dashed #eee;
-    }
+    .rank-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 5px; border-bottom: 1px dashed #eee; }
     .rank-name { font-size: 16px; font-weight: bold; color: #333; }
     
-    /* Yahoo 新聞分類 */
+    /* 產業新聞分類標題 */
     .news-category-header {
-        background-color: #f1f8ff; color: #1f4e78;
-        padding: 8px 12px; border-left: 6px solid #1f4e78;
-        font-size: 20px !important; font-weight: 900;
-        margin-top: 25px; margin-bottom: 10px;
+        background-color: #e3f2fd; color: #1565c0;
+        padding: 10px 15px; border-left: 6px solid #1565c0;
+        font-size: 22px !important; font-weight: 900;
+        margin-top: 30px; margin-bottom: 15px;
+        border-radius: 0 10px 10px 0;
     }
-    .news-item { padding: 12px 0; border-bottom: 1px solid #eee; }
-    .news-link {
-        text-decoration: none; color: #222;
-        font-size: 20px; font-weight: 600;
-        line-height: 1.4; display: block; margin-bottom: 6px;
+    
+    /* 新聞超連結樣式 */
+    .news-item { padding: 12px 5px; border-bottom: 1px solid #eee; }
+    .news-link-text {
+        text-decoration: none; color: #2c3e50;
+        font-size: 20px !important; font-weight: 700;
+        line-height: 1.5; display: block; margin-bottom: 5px;
     }
-    .news-link:hover { color: #2E86C1; }
+    .news-link-text:hover { color: #d32f2f; text-decoration: underline; }
     .news-meta { font-size: 13px; color: #888; }
-    .news-tag { display: inline-block; background: #eee; color: #555; font-size: 12px; padding: 2px 6px; border-radius: 4px; margin-right: 5px; }
-
+    
     div[data-testid="column"] { padding: 0 2px !important; }
     </style>
     """, unsafe_allow_html=True)
 
 st.title("👵 阿美的股海顧問")
-# 顯示更新時間，讓媽媽知道資料是最新的
-st.caption(f"自動更新啟用中 (每5分鐘) | 上次更新：{datetime.now().strftime('%H:%M:%S')}")
+st.caption(f"產業新聞自動篩選系統 | 更新：{datetime.now().strftime('%H:%M')}")
 
-# --- 5. 資料設定 ---
+# --- 5. 精細化產業關鍵字矩陣 (The Filtering Engine) ---
+# 這是系統的大腦，負責把新聞歸類到正確的抽屜
 KEYWORD_MAPPING = {
-    "📊 上市類股": {
-        "半導體/電子": ["台積電", "聯發科", "聯電", "半導體", "晶圓", "IC", "電子"],
-        "電腦/光電": ["電腦", "廣達", "緯創", "光電", "面板", "友達", "群創", "技嘉", "華碩", "宏碁"],
-        "航運/運輸": ["長榮", "陽明", "萬海", "航運", "航空", "華航", "長榮航", "散裝"],
-        "金融/保險": ["金控", "銀行", "富邦", "國泰", "中信", "玉山", "元大", "金融"],
-        "水泥/鋼鐵/傳產": ["水泥", "台泥", "亞泥", "鋼鐵", "中鋼", "紡織", "塑膠", "台塑"],
-        "生技/營建": ["生技", "藥", "疫苗", "營建", "房市", "遠雄", "興富發"]
-    },
-    "💡 概念股": {
-        "AI/機器人": ["AI", "人工智慧", "機器人", "伺服器", "輝達", "NVIDIA", "散熱", "奇鋐"],
-        "蘋果供應鏈": ["蘋果", "Apple", "iPhone", "iPad", "鴻海", "大立光", "Type-C"],
-        "電動車/車電": ["電動車", "特斯拉", "Tesla", "電池", "充電樁", "裕隆", "鴻華", "ADAS"],
-        "綠能/重電": ["綠能", "風電", "太陽能", "儲能", "華城", "士電", "中興電"],
-        "元宇宙/網通": ["元宇宙", "VR", "宏達電", "網通", "智邦", "WiFi", "5G", "低軌衛星"]
-    },
-    "🏢 集團股": {
-        "台積電集團": ["台積電", "精材", "創意", "世界先進"],
-        "鴻海集團": ["鴻海", "鴻準", "群創", "樺漢", "工業富聯"],
-        "台塑集團": ["台塑", "南亞", "台化", "台塑化"],
-        "長榮集團": ["長榮", "榮運", "長榮航", "長榮鋼"],
-        "國泰/富邦集團": ["國泰金", "富邦金", "富邦媒"],
-        "聯華/遠東集團": ["聯華", "聯強", "遠東新", "遠傳"]
-    }
+    "🤖 AI 與半導體": ["台積電", "聯電", "聯發科", "日月光", "AI", "半導體", "晶圓", "輝達", "NVIDIA", "CoWoS", "先進封裝", "伺服器", "緯創", "廣達", "技嘉"],
+    "🏗️ 鋼鐵與水泥": ["中鋼", "中鴻", "大成鋼", "鋼鐵", "台泥", "亞泥", "水泥", "玻陶", "豐興", "鋼價", "基建"],
+    "🚢 航運與運輸": ["長榮", "陽明", "萬海", "航運", "貨櫃", "散裝", "BDI", "航空", "華航", "長榮航", "星宇", "運價"],
+    "🚗 汽車與供應鏈": ["裕隆", "和泰車", "中華車", "汽車", "電動車", "特斯拉", "Tesla", "鴻華", "充電樁", "車用", "東陽", "堤維西", "AM"],
+    "💰 金融與銀行": ["金控", "銀行", "壽險", "富邦", "國泰", "中信", "玉山", "兆豐", "台新", "升息", "降息", "股利", "配息"],
+    "⚡ 重電與綠能": ["華城", "士電", "中興電", "亞力", "重電", "綠能", "風電", "太陽能", "儲能", "台電", "電網"],
+    "💊 生技與防疫": ["生技", "藥", "疫苗", "合一", "高端", "美時", "保瑞", "醫療"],
+    "🏠 營建與房產": ["營建", "房地產", "房市", "遠雄", "興富發", "國產", "預售屋"]
 }
 
+# 熱門榜單
 HOT_LISTS = {
-    "🔥 熱門討論股": ["2330.TW", "2317.TW", "3231.TW", "2382.TW", "2603.TW", "2609.TW"], 
+    "🔥 熱門討論": ["2330.TW", "2317.TW", "3231.TW", "2382.TW", "2603.TW", "2609.TW"], 
     "💎 人氣 ETF": ["00878.TW", "0056.TW", "0050.TW", "00919.TW", "00929.TW", "00940.TW"], 
-    "💡 熱門概念": ["1519.TW", "1513.TW", "2308.TW", "2454.TW", "6669.TW", "2376.TW"] 
+    "💡 焦點概念": ["1519.TW", "1513.TW", "2308.TW", "2454.TW", "6669.TW", "2376.TW"] 
 }
 
+# 漢化字典
 STOCK_MAP = {
     "00878": "國泰永續高股息", "2301": "光寶科", "2308": "台達電", "2412": "中華電", 
     "2476": "鉅祥", "2884": "玉山金", "2892": "第一金", "3034": "聯詠", 
@@ -138,7 +112,7 @@ STOCK_MAP = {
     "2609": "陽明", "2615": "萬海", "2454": "聯發科", "3231": "緯創",
     "0056": "元大高股息", "0050": "元大台灣50", "00919": "群益台灣精選", "00929": "復華科技優息",
     "00940": "元大台灣價值", "1519": "華城", "1513": "中興電", "1503": "士電", "2382": "廣達", "6669": "緯穎",
-    "2376": "技嘉"
+    "2376": "技嘉", "2002": "中鋼", "1101": "台泥", "2201": "裕隆"
 }
 
 # --- 6. 核心函數 ---
@@ -182,47 +156,55 @@ def get_stock_data(ticker_list):
     except: pass
     return pd.DataFrame(data)
 
-# 【關鍵調整】將快取時間從 1800 (30分) 改為 300 (5分)，配合自動更新
 @st.cache_data(ttl=300)
-def fetch_news_waterfall(rss_list):
-    buckets = {"📊 上市類股": [], "💡 概念股": [], "🏢 集團股": [], "🌍 其他快訊": []}
+def fetch_and_filter_news(rss_urls):
+    # 建立空的分類桶
+    buckets = {key: [] for key in KEYWORD_MAPPING.keys()}
+    buckets["🌍 其他頭條"] = []
+    
     seen_titles = set()
     
-    if not rss_list:
-        rss_list = ["https://news.cnyes.com/rss/cat/headline", "https://news.cnyes.com/rss/cat/200"]
+    # 擴充預設新聞源：加入鉅亨頭條、鉅亨台股、MoneyDJ
+    if not rss_urls:
+        rss_urls = [
+            "https://news.cnyes.com/rss/cat/headline", # 頭條
+            "https://news.cnyes.com/rss/cat/200",      # 台股新聞
+            "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
+            "https://www.moneydj.com/rss/xa/mdj_xa_rss.xml"
+        ]
 
-    for url in rss_list:
+    for url in rss_urls:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:25]:
+            # 抓取數量提升到 40 則，增加匹配成功率
+            for entry in feed.entries[:40]: 
                 title = entry.title
                 if title[:10] in seen_titles: continue
                 seen_titles.add(title[:10])
                 
+                # 簡單翻譯英文
                 if "yahoo" in url and sum(1 for c in title if '\u4e00' <= c <= '\u9fff') < len(title)*0.3:
                      try: title = GoogleTranslator(source='auto', target='zh-TW').translate(title)
                      except: pass
                 
                 item = {
-                    "title": title, "link": entry.link, 
+                    "title": title, 
+                    "link": entry.link, 
                     "date": entry.get('published', '')[:16], 
-                    "src": feed.feed.get('title', '快訊')
+                    "src": feed.feed.get('title', '新聞')
                 }
                 
+                # --- 關鍵字匹配引擎 ---
                 matched = False
-                for sub, kws in KEYWORD_MAPPING["📊 上市類股"].items():
-                    if any(kw in title for kw in kws):
-                        item_copy = item.copy(); item_copy["tag"] = sub; buckets["📊 上市類股"].append(item_copy); matched = True; break 
-                if not matched:
-                    for sub, kws in KEYWORD_MAPPING["💡 概念股"].items():
-                        if any(kw in title for kw in kws):
-                            item_copy = item.copy(); item_copy["tag"] = sub; buckets["💡 概念股"].append(item_copy); matched = True; break
-                if not matched:
-                    for sub, kws in KEYWORD_MAPPING["🏢 集團股"].items():
-                        if any(kw in title for kw in kws):
-                            item_copy = item.copy(); item_copy["tag"] = sub; buckets["🏢 集團股"].append(item_copy); matched = True; break
+                for category, keywords in KEYWORD_MAPPING.items():
+                    if any(kw in title for kw in keywords):
+                        buckets[category].append(item)
+                        matched = True
+                        break # 歸類到第一個符合的分類
                 
-                if not matched: buckets["🌍 其他快訊"].append(item)
+                if not matched:
+                    buckets["🌍 其他頭條"].append(item)
+                    
         except: continue
     return buckets
 
@@ -243,45 +225,25 @@ with st.sidebar:
             update_cloud("add", watch_code.upper(), "watchlist")
             st.cache_data.clear(); st.rerun()
 
-    with st.expander("📰 新增【新聞頻道】(支援中文)"):
-        st.info("輸入「雅虎」、「鉅亨」或直接貼網址")
-        new_rss_input = st.text_input("媒體名稱或網址", key="add_rss_input", placeholder="例如：雅虎")
-        
+    with st.expander("📰 新增【新聞頻道】"):
+        st.info("輸入「鉅亨」、「雅虎」或網址")
+        new_rss_input = st.text_input("媒體名稱", key="add_rss_input")
         if st.button("加入頻道"):
-            url_to_add = ""
-            found_name = ""
+            url = new_rss_input
+            if new_rss_input in MEDIA_PRESETS: url = MEDIA_PRESETS[new_rss_input]
+            elif "http" not in new_rss_input and new_rss_input in MEDIA_PRESETS: url = MEDIA_PRESETS[new_rss_input] # 簡易防呆
             
-            if "http" in new_rss_input:
-                url_to_add = new_rss_input
-            else:
-                for key, link in MEDIA_PRESETS.items():
-                    if key in new_rss_input:
-                        url_to_add = link
-                        found_name = key
-                        break
-            
-            if url_to_add:
-                update_cloud("add", url_to_add, "news")
-                if found_name: st.success(f"已辨識為【{found_name}】，加入成功！")
-                else: st.success("已加入自訂網址！")
-                st.cache_data.clear(); st.rerun()
-            else:
-                st.error("⚠️ 找不到這個媒體，請嘗試輸入「雅虎」、「鉅亨」或直接貼上網址。")
+            update_cloud("add", url, "news")
+            st.success("已加入")
+            st.cache_data.clear(); st.rerun()
         
-        current_feeds = get_list_from_cloud("news")
-        if current_feeds:
-            st.write("---")
-            st.write("已加入的頻道：")
-            for feed in current_feeds:
-                display_name = "自訂來源"
-                for k, v in MEDIA_PRESETS.items():
-                    if v == feed: display_name = k; break
-                
-                c1, c2 = st.columns([4, 1])
-                c1.text(f"{display_name} ({feed[:10]}...)")
-                if c2.button("刪", key=f"del_rss_{feed}"):
-                     update_cloud("remove", feed, "news")
-                     st.cache_data.clear(); st.rerun()
+        feeds = get_list_from_cloud("news")
+        if feeds:
+            st.write("已加入頻道：")
+            for f in feeds:
+                c1,c2=st.columns([4,1])
+                c1.text(f[:20]+"...")
+                if c2.button("刪", key=f"d_{f}"): update_cloud("remove",f,"news"); st.rerun()
 
     if st.button("🔄 強制更新"): st.cache_data.clear(); st.rerun()
 
@@ -339,48 +301,40 @@ for title, tickers in HOT_LISTS.items():
         st.markdown(html, unsafe_allow_html=True)
     idx += 1
 
-# === 第四層：📰 產業新聞瀑布流 ===
+# === 第四層：📰 自動分類產業新聞 (瀑布流) ===
 st.markdown("---")
-st.subheader("🗞️ 產業新聞快遞")
+st.subheader("🗞️ 產業新聞快遞 (AI 自動分類)")
 
-st.markdown("""
-<div style="overflow-x:auto; white-space:nowrap; padding-bottom:10px;">
-<a href="https://news.cnyes.com/news/cat/headline" target="_blank" style="padding:5px 10px; background:#eee; border-radius:15px; text-decoration:none; margin-right:5px; font-size:14px;">鉅亨頭條 ↗</a>
-<a href="https://news.cnyes.com/news/cat/hotai" target="_blank" style="padding:5px 10px; background:#eee; border-radius:15px; text-decoration:none; margin-right:5px; font-size:14px;">台股速報 ↗</a>
-<a href="https://tw.stock.yahoo.com/class" target="_blank" style="padding:5px 10px; background:#eee; border-radius:15px; text-decoration:none; margin-right:5px; font-size:14px;">Yahoo類股 ↗</a>
-</div>
-""", unsafe_allow_html=True)
-
-# 抓取雲端自訂新聞源 + 預設源
+# 抓取雲端 + 預設 RSS
 custom_rss = get_list_from_cloud("news")
-if not custom_rss:
-    active_rss = [
-        "https://news.cnyes.com/rss/cat/headline",
-        "https://news.cnyes.com/rss/cat/200",
-        "https://money.udn.com/rssfeed/news/1001/5590/5591?ch=money",
-        "https://finance.yahoo.com/news/rssindex"
-    ]
-else:
-    active_rss = custom_rss
+active_rss = custom_rss if custom_rss else []
 
-with st.spinner("正在為媽媽整理新聞..."):
-    news_buckets = fetch_news_waterfall(active_rss)
+with st.spinner("正在為媽媽搜尋各大報，過濾產業新聞..."):
+    # 呼叫過濾函數
+    news_buckets = fetch_and_filter_news(active_rss)
 
-cats_order = ["📊 上市類股", "💡 概念股", "🏢 集團股", "🌍 其他快訊"]
+# 定義顯示順序
+display_order = [
+    "🤖 AI 與半導體", "🏗️ 鋼鐵與水泥", "🚗 汽車與供應鏈", 
+    "🚢 航運與運輸", "⚡ 重電與綠能", "💰 金融與銀行", 
+    "💊 生技與防疫", "🏠 營建與房產", "🌍 其他頭條"
+]
 
-for cat in cats_order:
-    items = news_buckets.get(cat, [])
+for category in display_order:
+    items = news_buckets.get(category, [])
+    # 只有當該類別有新聞時才顯示，避免版面空白
     if items:
-        st.markdown(f'<div class="news-category-header">{cat}</div>', unsafe_allow_html=True)
-        for n in items[:8]:
-            tag_html = f'<span class="news-tag">{n["tag"]}</span>' if "tag" in n else ""
+        st.markdown(f'<div class="news-category-header">{category}</div>', unsafe_allow_html=True)
+        
+        # 顯示該類別的新聞 (標題即連結)
+        for n in items[:6]: # 每類最多顯示6則，避免滑不到底
             st.markdown(f"""
             <div class="news-item">
-                <a href="{n['link']}" target="_blank" class="news-link">
+                <a href="{n['link']}" target="_blank" class="news-link-text">
                     {n['title']}
                 </a>
                 <div class="news-meta">
-                    {tag_html} {n['src']} • {n['date']}
+                    {n['src']} • {n['date']}
                 </div>
             </div>
             """, unsafe_allow_html=True)
