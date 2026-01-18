@@ -12,7 +12,7 @@ st.set_page_config(layout="wide", page_title="阿美的股海決策報")
 
 # --- 2. 您的 API 地址 (請換成您 Apps Script 部署後的網址) ---
 # 結尾應該是 /exec
-GAS_URL = "https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXX/exec" 
+GAS_URL = "https://script.google.com/macros/s/AKfycbwTsM79MMdedizvIcIn7tgwT81VIhj87WM-bvR45QgmMIUsIemmyR_FzMvG3v5LEHEvPw/exec" 
 
 # --- 3. CSS 優化 (長輩模式) ---
 st.markdown("""
