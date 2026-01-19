@@ -18,7 +18,7 @@ def get_tw_time():
 # --- 2. GAS API ---
 GAS_URL = "https://script.google.com/macros/s/AKfycbwTsM79MMdedizvIcIn7tgwT81VIhj87WM-bvR45QgmMIUsIemmyR_FzMvG3v5LEHEvPw/exec"
 
-# --- 3. CSS 專業級優化 (響應式設計) ---
+# --- 3. CSS 極致緊密版 (8欄/4欄適配) ---
 st.markdown("""
 <style>
 /* 全域設定 */
@@ -26,114 +26,108 @@ html, body, [class*="css"] {
     font-family: "Microsoft JhengHei", "Segoe UI", Roboto, Helvetica, sans-serif; 
 }
 
-/* --- 關鍵：響應式欄位控制 --- */
-/* 強制設定欄位的最小寬度，讓它在手機上自動換行 */
+/* --- 關鍵：響應式欄位控制 (8欄/4欄) --- */
 div[data-testid="column"] {
-    min-width: 140px !important; /* 手機上至少要有這個寬度，不然會變 2 欄 */
-    flex: 1 1 auto !important; /* 讓欄位彈性伸縮 */
-    padding: 0 3px !important; /* 縮小欄位間距 */
+    /* 手機上若要塞4個，每個欄位寬度不能超過螢幕的 25% (約 90px) */
+    min-width: 85px !important; 
+    flex: 1 1 auto !important;
+    padding: 0 1px !important; /* 極小間距 */
 }
 
-/* --- 股票卡片 (App 風格) --- */
+/* --- 股票卡片 (高密度) --- */
 .compact-card { 
     border: 1px solid #e0e0e0; 
-    border-radius: 12px; /* 更圓潤的導角 */
-    padding: 12px 5px; 
+    border-radius: 6px; /* 導角改小，較為俐落 */
+    padding: 6px 2px; /* 內距縮小 */
     text-align: center; 
     background: white; 
-    margin-bottom: 8px; 
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08); /* 輕盈的陰影 */
-    transition: all 0.2s ease-in-out;
-    min-height: 90px;
-    position: relative; /* 為了定位 */
+    margin-bottom: 4px; 
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    min-height: 75px; /* 高度壓縮 */
+    transition: all 0.2s;
 }
-/* 滑鼠經過會有浮起效果 */
 .compact-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.15);
-    border-color: #b0bec5;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    border-color: #90a4ae;
 }
 
 .compact-name { 
-    font-size: 15px !important; 
+    font-size: 14px !important; /* 字體稍微縮小以適應 4 欄 */
     font-weight: 700; 
     color: #37474f; 
     margin: 0; 
-    line-height: 1.3;
+    line-height: 1.1;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .compact-price { 
-    font-size: 24px !important; 
+    font-size: 18px !important; /* 價格字體適中 */
     font-weight: 800; 
-    margin: 5px 0 0 0;
+    margin: 2px 0 0 0;
     letter-spacing: -0.5px;
-    font-family: "Segoe UI", Roboto, sans-serif; /* 數字用英文體較好看 */
+    font-family: "Segoe UI", Roboto, sans-serif;
 }
 
-/* --- 隱形刪除鈕 (極致優化) --- */
+/* --- 隱形刪除鈕 --- */
 div[data-testid="column"] .stButton > button {
     width: 100%;
     border: none !important;
     background: transparent !important;
-    color: #cfd8dc !important; /* 平常幾乎隱形 */
-    font-size: 16px !important; /* 放大一點比較好點 */
+    color: #eceff1 !important; /* 平常幾乎看不見 */
+    font-size: 12px !important;
     padding: 0 !important;
-    height: 24px !important;
+    height: 15px !important;
     line-height: 1 !important;
-    margin-top: -5px !important;
-    transition: color 0.2s;
+    margin-top: -2px !important;
 }
 div[data-testid="column"] .stButton > button:hover {
-    color: #ef5350 !important; /* 碰到變紅 */
-    background: #ffebee !important; /* 加一點淡紅背景提示 */
-    border-radius: 0 0 8px 8px;
+    color: #ef5350 !important;
+    background: rgba(255, 235, 238, 0.5) !important;
 }
 
-/* --- 新聞標題優化 --- */
+/* --- 新聞標題優化 (緊湊) --- */
 .news-category-header { 
-    background: linear-gradient(90deg, #e3f2fd, #ffffff);
-    color: #1565c0; 
-    padding: 10px 15px; 
-    border-left: 5px solid #1565c0; 
-    font-size: 1.25rem !important; 
+    background: #f1f8e9; /* 改用清爽的淡綠色區隔 */
+    color: #2e7d32; 
+    padding: 6px 10px; 
+    border-left: 4px solid #2e7d32; 
+    font-size: 18px !important; 
     font-weight: 800; 
-    margin-top: 25px; 
-    margin-bottom: 10px; 
-    border-radius: 0 8px 8px 0;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    margin-top: 15px; 
+    margin-bottom: 5px; 
+    border-radius: 4px;
 }
 .news-item-compact { 
-    padding: 10px 0; 
-    border-bottom: 1px solid #f0f0f0; 
-    line-height: 1.5; 
+    padding: 6px 0; /* 新聞間距縮小 */
+    border-bottom: 1px dashed #e0e0e0; 
+    line-height: 1.3; 
 }
 .news-link-text { 
     text-decoration: none; 
     color: #263238; 
-    font-size: 18px !important; 
+    font-size: 16px !important; 
     font-weight: 600; 
     display: block; 
 }
-.news-link-text:hover { color: #0277bd; }
+.news-link-text:hover { color: #1565c0; text-decoration: underline;}
 .news-meta-compact { 
-    font-size: 13px; 
+    font-size: 11px; 
     color: #90a4ae; 
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
-/* --- 熱門榜單 --- */
-.rank-title { font-size: 16px; font-weight: 900; color: #fff; background: #455a64; padding: 10px; border-radius: 8px 8px 0 0; margin-top: 15px; text-align: center; letter-spacing: 1px;}
-.rank-box { border: 1px solid #cfd8dc; border-top: none; border-radius: 0 0 8px 8px; padding: 5px; background: #fff; margin-bottom: 15px; }
-.rank-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px dashed #eceff1; }
-.rank-name { font-size: 15px; font-weight: bold; color: #37474f; }
+/* --- 熱門榜單 (緊湊) --- */
+.rank-title { font-size: 15px; font-weight: 700; color: #fff; background: #607d8b; padding: 6px; border-radius: 4px 4px 0 0; margin-top: 10px; text-align: center;}
+.rank-box { border: 1px solid #cfd8dc; border-top: none; border-radius: 0 0 4px 4px; padding: 2px; background: #fff; margin-bottom: 10px; }
+.rank-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-bottom: 1px dashed #eceff1; }
+.rank-name { font-size: 14px; font-weight: bold; color: #37474f; }
 
 /* 頂部更新按鈕 */
 .stButton > button { 
     width: 100%; 
-    border-radius: 10px; 
+    border-radius: 6px; 
     font-weight: bold; 
-    font-size: 16px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    font-size: 15px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -325,10 +319,9 @@ df_inv = pd.DataFrame()
 if inv_list: df_inv = get_stock_data(inv_list)
 
 if not df_inv.empty:
-    cols = st.columns(6) 
+    cols = st.columns(8) # 電腦版 8 欄
     for i, row in df_inv.iterrows():
-        with cols[i%6]:
-            # 極簡卡片與隱形按鈕
+        with cols[i%8]:
             st.markdown(f"""
             <div class="compact-card" style="border-left: 4px solid {row['color']};">
                 <div class="compact-name" title="{row['name']}">{row['name']}</div>
@@ -347,60 +340,7 @@ df_watch = pd.DataFrame()
 if watch_list: df_watch = get_stock_data(watch_list)
 
 if not df_watch.empty:
-    cols2 = st.columns(6)
+    cols2 = st.columns(8) # 電腦版 8 欄
     for i, row in df_watch.iterrows():
-        with cols2[i%6]:
-            st.markdown(f"""<div class="compact-card"><div class="compact-name">{row['name']}</div><div class="compact-price" style="color:{row['color']}">{row['price']}</div></div>""", unsafe_allow_html=True)
-            if st.button("✕", key=f"dw_{row['code']}"): 
-                update_cloud_remove(row['full_code'], "watchlist", current_user)
-                st.cache_data.clear(); st.rerun()
-else: st.info("暫無觀察名單。")
-
-# 3. 熱門
-st.markdown("---")
-st.subheader("🏆 市場熱門戰情室")
-HOT_LISTS = {
-    "🔥 熱門討論": ["2330.TW", "2317.TW", "3231.TW", "2382.TW", "2603.TW", "2609.TW"], 
-    "💎 人氣 ETF": ["00878.TW", "0056.TW", "0050.TW", "00919.TW", "00929.TW", "00940.TW"], 
-    "💡 焦點概念": ["1519.TW", "1513.TW", "2308.TW", "2454.TW", "6669.TW", "2376.TW"] 
-}
-hot_cols = st.columns(3)
-idx = 0
-for title, tickers in HOT_LISTS.items():
-    with hot_cols[idx]:
-        st.markdown(f'<div class="rank-title">{title}</div>', unsafe_allow_html=True)
-        df_hot = get_stock_data(tickers)
-        if not df_hot.empty:
-            html = '<div class="rank-box">'
-            for _, row in df_hot.iterrows():
-                html += f"""<div class="rank-row"><span class="rank-name">{row['name']}</span><span class="rank-price" style="color:{row['color']}">{row['sign']} {row['price']}</span></div>"""
-            html += '</div>'
-            st.markdown(html, unsafe_allow_html=True)
-    idx += 1
-
-# 4. 新聞
-st.markdown("---")
-st.subheader("🗞️ 產業新聞快遞")
-user_rss = get_list_from_cloud("news", current_user)
-with st.spinner("正在搜尋最新新聞..."):
-    news_buckets = fetch_and_filter_news(user_rss)
-
-display_order = ["🤖 AI 與半導體", "🏗️ 鋼鐵與水泥", "🚢 航運與運輸", "🚗 汽車與供應鏈", "💰 金融與銀行", "⚡ 重電與綠能", "💊 生技與防疫", "🏠 營建與房產", "🌍 其他頭條"]
-
-for category in display_order:
-    items = news_buckets.get(category, [])
-    if items:
-        st.markdown(f'<div class="news-category-header">{category} ({len(items)})</div>', unsafe_allow_html=True)
-        for n in items: 
-            st.markdown(f"""
-            <div class="news-item-compact">
-                <a href="{n['link']}" target="_blank" class="news-link-text">
-                    {n['title']}
-                </a>
-                <div class="news-meta-compact">
-                    {n['src']} • {n['date']}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-st.markdown("<br><br>", unsafe_allow_html=True)
+        with cols2[i%8]:
+            st.markdown(f"""<div class="compact-card"><div class="compact-name">{row['name']}</div>
