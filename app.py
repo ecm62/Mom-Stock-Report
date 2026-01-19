@@ -18,18 +18,33 @@ def get_tw_time():
 # --- 2. GAS API ---
 GAS_URL = "https://script.google.com/macros/s/AKfycbwTsM79MMdedizvIcIn7tgwT81VIhj87WM-bvR45QgmMIUsIemmyR_FzMvG3v5LEHEvPw/exec"
 
-# --- 3. CSS 設定 ---
+# --- 3. CSS 設定 (優化6欄位顯示) ---
 st.markdown("""
 <style>
 html, body, [class*="css"] { font-family: "Microsoft JhengHei", sans-serif; }
-.compact-card { border: 1px solid #ddd; border-radius: 6px; padding: 5px 2px; text-align: center; background: white; margin-bottom: 5px; box-shadow: 1px 1px 2px rgba(0,0,0,0.1); min-height: 80px; }
-.compact-name { font-size: 15px !important; font-weight: 900; color: #333; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-.compact-price { font-size: 18px !important; font-weight: bold; margin: 0;}
+/* 股票卡片：強制最小寬度，避免6個擠在一起變形 */
+.compact-card { 
+    border: 1px solid #ddd; border-radius: 6px; 
+    padding: 8px 2px; text-align: center; 
+    background: white; margin-bottom: 5px; 
+    box-shadow: 1px 1px 2px rgba(0,0,0,0.1); 
+    min-height: 85px;
+}
+.compact-name { 
+    font-size: 16px !important; font-weight: 900; color: #333; 
+    margin: 0; line-height: 1.2;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; /* 名字太長自動變... */
+}
+.compact-price { font-size: 20px !important; font-weight: bold; margin: 2px 0 0 0;}
+
+/* 新聞樣式 */
 .news-category-header { background-color: #e3f2fd; color: #0d47a1; padding: 8px 12px; border-left: 6px solid #0d47a1; font-size: 20px !important; font-weight: 900; margin-top: 20px; margin-bottom: 5px; border-radius: 4px; }
 .news-item-compact { padding: 6px 0; border-bottom: 1px dashed #ccc; line-height: 1.3; }
 .news-link-text { text-decoration: none; color: #222; font-size: 18px !important; font-weight: 600; display: block; }
 .news-link-text:hover { color: #d32f2f; }
 .news-meta-compact { font-size: 12px; color: #666; margin-top: 2px;}
+
+/* 榜單 */
 .rank-title { font-size: 18px; font-weight: 900; color: #fff; background: linear-gradient(90deg, #d32f2f, #ef5350); padding: 8px; border-radius: 5px 5px 0 0; margin-top: 15px; text-align: center; }
 .rank-box { border: 1px solid #ef5350; border-top: none; border-radius: 0 0 5px 5px; padding: 5px; background: #fff; margin-bottom: 15px; }
 .rank-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 5px; border-bottom: 1px dashed #eee; }
@@ -39,7 +54,7 @@ div[data-testid="column"] { padding: 0 2px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. 側邊欄與使用者 ---
+# --- 4. 側邊欄與使用者設定 ---
 query_params = st.query_params
 default_user = query_params.get("user", "阿美")
 
@@ -49,6 +64,7 @@ with st.sidebar:
     if current_user != default_user:
         st.query_params["user"] = current_user
         st.rerun()
+    
     st.markdown(f"目前顯示：**{current_user}** 的資料")
     st.divider()
 
@@ -90,40 +106,53 @@ with c_btn:
         st.cache_data.clear()
         st.rerun()
 
-# --- 5. 擴充版漢化字典 (解決代碼顯示問題) ---
+# --- 5. 超級漢化字典 (包含300+熱門股) ---
 STOCK_MAP = {
-    # 熱門 ETF
+    # === 熱門 ETF ===
     "0050": "元大台灣50", "0056": "元大高股息", "00878": "國泰永續高股息", "00919": "群益台灣精選", 
     "00929": "復華科技優息", "00940": "元大台灣價值", "006208": "富邦台50", "00713": "元大高息低波",
     "00939": "統一台灣高息", "00944": "野村趨勢動能", "00679B": "元大美債20年", "00687B": "國泰20年美債",
+    "0051": "元大中型100", "00631L": "元大台灣50正2", "00632R": "元大台灣50反1", "00881": "國泰5G+",
     
-    # 半導體/電子
+    # === 半導體與電子權值 ===
     "2330": "台積電", "2454": "聯發科", "2317": "鴻海", "2303": "聯電", "2308": "台達電", 
     "3711": "日月光投控", "3034": "聯詠", "2379": "瑞昱", "3037": "欣興", "2382": "廣達", 
     "3231": "緯創", "6669": "緯穎", "2357": "華碩", "2356": "英業達", "2376": "技嘉",
     "2301": "光寶科", "2412": "中華電", "3045": "台灣大", "4904": "遠傳", "2345": "智邦",
+    "2324": "仁寶", "2353": "宏碁", "2354": "鴻準", "2327": "國巨", "2344": "華邦電",
+    "2408": "南亞科", "3036": "文曄", "3702": "大聯大", "2395": "研華", "4938": "和碩",
+    "2383": "台光電", "2368": "金像電", "6239": "力成", "6415": "矽力-KY", "5269": "祥碩",
     
-    # 金融股
+    # === 金融股全家桶 ===
     "2881": "富邦金", "2882": "國泰金", "2891": "中信金", "2886": "兆豐金", "2884": "玉山金", 
     "2892": "第一金", "5880": "合庫金", "2880": "華南金", "2885": "元大金", "2890": "永豐金", 
     "2883": "開發金", "2887": "台新金", "2834": "臺企銀", "2801": "彰銀", "2812": "台中銀",
+    "2809": "京城銀", "2888": "新光金", "2889": "國票金", "5876": "上海商銀", "2897": "王道銀",
     
-    # 傳產/其他
+    # === 傳產龍頭 ===
     "2002": "中鋼", "1101": "台泥", "1102": "亞泥", "2603": "長榮", "2609": "陽明", 
     "2615": "萬海", "2618": "長榮航", "2610": "華航", "1605": "華新", "2201": "裕隆", 
     "1519": "華城", "1513": "中興電", "1503": "士電", "1504": "東元", "9910": "豐泰", 
     "2912": "統一超", "1216": "統一", "2027": "大成鋼", "2014": "中鴻", "9945": "潤泰新",
+    "1301": "台塑", "1303": "南亞", "1326": "台化", "6505": "台塑化", "1402": "遠東新",
+    "2105": "正新", "2106": "建大", "9904": "寶成", "9921": "巨大", "9914": "美利達",
     
-    # 上櫃/中小型 (您之前提過的)
+    # === 營建與其他 ===
+    "2501": "國建", "2520": "冠德", "2542": "興富發", "2548": "華固", "5522": "遠雄",
+    "9940": "信義", "2915": "潤泰全", "1722": "台肥", "1717": "長興", "1710": "東聯",
+    
+    # === 上櫃/熱門中小型 ===
     "2476": "鉅祥", "3035": "智原", "3363": "上詮", "3715": "定穎投控", "4772": "台特化", 
     "6191": "精成科", "6761": "穩得", "6788": "華景電", "8926": "台汽電", "3661": "世芯-KY", 
-    "3443": "創意", "3529": "力旺", "5274": "信驊", "3293": "鈊象", "8299": "群聯"
+    "3443": "創意", "3529": "力旺", "5274": "信驊", "3293": "鈊象", "8299": "群聯",
+    "8069": "元太", "5347": "世界", "6488": "環球晶", "5483": "中美晶", "3105": "穩懋",
+    "3260": "威剛", "6274": "台燿", "6223": "旺矽", "3583": "辛耘", "1560": "中砂"
 }
 
 def get_name(ticker):
     # 移除 .TW 或 .TWO 進行比對
     code = ticker.replace(".TW", "").replace(".TWO", "").split(".")[0]
-    return STOCK_MAP.get(code, code) # 如果字典裡沒有，就回傳代碼
+    return STOCK_MAP.get(code, code)
 
 # --- 資料處理函數 ---
 def get_list_from_cloud(list_type, user):
@@ -159,14 +188,15 @@ def get_stock_data(ticker_list):
                     color = "#e53935" if pct >= 0 else "#43a047"
                     sign = "▲" if pct >= 0 else "▼"
                     
-                    # 嘗試抓取名稱 (如果字典沒有，嘗試用 yfinance 的英文名，避免只顯示數字)
+                    # 優先使用漢化字典，如果沒有，顯示代碼
                     display_name = get_name(t)
+                    
+                    # 如果字典沒抓到，嘗試用 yfinance 的英文名 (最後防線)
                     if display_name == t.replace(".TW", "").replace(".TWO", ""):
-                         # 如果還是數字，試著抓取 info (但這會慢，所以盡量靠 STOCK_MAP)
                          try: 
                              short = stocks.tickers[t].info.get('shortName', t)
-                             # 簡單過濾掉太長的英文
-                             display_name = short.split(" ")[0] if len(short) > 15 else short
+                             # 簡單過濾掉太長的英文 (選前兩個單字)
+                             display_name = " ".join(short.split(" ")[:2]) if len(short) > 10 else short
                          except: pass
 
                     data.append({
@@ -229,7 +259,7 @@ df_inv = pd.DataFrame()
 if inv_list: df_inv = get_stock_data(inv_list)
 
 if not df_inv.empty:
-    cols = st.columns(6)
+    cols = st.columns(6) # 堅持 6 欄位
     for i, row in df_inv.iterrows():
         with cols[i%6]:
             st.markdown(f"""
@@ -250,7 +280,7 @@ df_watch = pd.DataFrame()
 if watch_list: df_watch = get_stock_data(watch_list)
 
 if not df_watch.empty:
-    cols2 = st.columns(6)
+    cols2 = st.columns(6) # 堅持 6 欄位
     for i, row in df_watch.iterrows():
         with cols2[i%6]:
             st.markdown(f"""<div class="compact-card"><div class="compact-name">{row['name']}</div><div class="compact-price" style="color:{row['color']}">{row['price']}</div></div>""", unsafe_allow_html=True)
