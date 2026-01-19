@@ -15,7 +15,7 @@ TW_TZ = timezone(timedelta(hours=8))
 def get_tw_time():
     return datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M')
 
-# --- 2. GAS API (已更新為最新網址) ---
+# --- 2. GAS API ---
 GAS_URL = "https://script.google.com/macros/s/AKfycbwTsM79MMdedizvIcIn7tgwT81VIhj87WM-bvR45QgmMIUsIemmyR_FzMvG3v5LEHEvPw/exec"
 
 # --- 3. CSS 設定 ---
@@ -114,7 +114,11 @@ STOCK_MAP = {"00878": "國泰高股息", "2330": "台積電", "2317": "鴻海", 
 def get_list_from_cloud(list_type, user):
     try:
         response = requests.get(GAS_URL, params={"action": "read", "type": list_type, "user": user}, timeout=5)
-        return response.json() or []
+        # 防呆：如果回傳不是陣列，或是空的，直接給空陣列
+        data = response.json()
+        if isinstance(data, list):
+            return data
+        return []
     except: return []
 
 def update_cloud_remove(code, list_type, user):
@@ -125,10 +129,18 @@ def get_name(ticker):
     code = ticker.split(".")[0]
     return STOCK_MAP.get(code, code)
 
+# 【關鍵修正】解決 AttributeError 與 NoneType 問題
 def get_stock_data(ticker_list):
     if not ticker_list: return pd.DataFrame()
-    valid = [t for t in ticker_list if t.strip()]
+    
+    # 強力過濾：確保資料不是 None 且轉為字串後不是空白
+    valid = []
+    for t in ticker_list:
+        if t and str(t).strip() != "":
+            valid.append(str(t).strip())
+            
     if not valid: return pd.DataFrame()
+    
     data = []
     try:
         stocks = yf.Tickers(" ".join(valid))
@@ -190,16 +202,18 @@ def fetch_and_filter_news(user_rss_urls):
         except: continue
     return buckets
 
+# 【關鍵修正】解決 NameError: 'df' is not defined
 # 1. 庫存
 st.subheader(f"💰 {current_user} 的庫存")
 inv_list = get_list_from_cloud("inventory", current_user)
-df = pd.DataFrame() # 預防性宣告，避免 NameError
-if inv_list:
-    df = get_stock_data(inv_list)
+df_inv = pd.DataFrame() # 先宣告空的 DataFrame，避免後面找不到變數
 
-if not df.empty:
+if inv_list:
+    df_inv = get_stock_data(inv_list)
+
+if not df_inv.empty:
     cols = st.columns(6)
-    for i, row in df.iterrows():
+    for i, row in df_inv.iterrows():
         with cols[i%6]:
             st.markdown(f"""
             <div class="compact-card" style="border-left: 4px solid {row['color']};">
@@ -211,18 +225,19 @@ if not df.empty:
                 update_cloud_remove(row['full_code'], "inventory", current_user)
                 st.cache_data.clear(); st.rerun()
 else: 
-    st.info("目前清單是空的，請從左側新增股票。")
+    st.info(f"嗨 {current_user}，目前庫存清單是空的，請從左側加入股票。")
 
 # 2. 觀察
 st.subheader(f"👀 {current_user} 的觀察名單")
 watch_list = get_list_from_cloud("watchlist", current_user)
-df_w = pd.DataFrame() # 預防性宣告
-if watch_list:
-    df_w = get_stock_data(watch_list)
+df_watch = pd.DataFrame() # 同樣先宣告空的
 
-if not df_w.empty:
+if watch_list:
+    df_watch = get_stock_data(watch_list)
+
+if not df_watch.empty:
     cols2 = st.columns(6)
-    for i, row in df_w.iterrows():
+    for i, row in df_watch.iterrows():
         with cols2[i%6]:
             st.markdown(f"""<div class="compact-card"><div class="compact-name">{row['name']}</div><div class="compact-price" style="color:{row['color']}">{row['price']}</div></div>""", unsafe_allow_html=True)
             if st.button("✖", key=f"dw_{row['code']}"): 
@@ -240,11 +255,13 @@ for title, tickers in HOT_LISTS.items():
     with hot_cols[idx]:
         st.markdown(f'<div class="rank-title">{title}</div>', unsafe_allow_html=True)
         df_hot = get_stock_data(tickers)
-        html = '<div class="rank-box">'
-        for _, row in df_hot.iterrows():
-            html += f"""<div class="rank-row"><span class="rank-name">{row['name']}</span><span class="rank-price" style="color:{row['color']}">{row['sign']} {row['price']}</span></div>"""
-        html += '</div>'
-        st.markdown(html, unsafe_allow_html=True)
+        # 防呆：如果熱門股抓不到資料，顯示空白
+        if not df_hot.empty:
+            html = '<div class="rank-box">'
+            for _, row in df_hot.iterrows():
+                html += f"""<div class="rank-row"><span class="rank-name">{row['name']}</span><span class="rank-price" style="color:{row['color']}">{row['sign']} {row['price']}</span></div>"""
+            html += '</div>'
+            st.markdown(html, unsafe_allow_html=True)
     idx += 1
 
 # 4. 新聞
