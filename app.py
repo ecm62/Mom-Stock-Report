@@ -343,4 +343,57 @@ if not df_watch.empty:
     cols2 = st.columns(8) # 電腦版 8 欄
     for i, row in df_watch.iterrows():
         with cols2[i%8]:
-            st.markdown(f"""<div class="compact-card"><div class="compact-name">{row['name']}</div>
+            st.markdown(f"""<div class="compact-card"><div class="compact-name">{row['name']}</div><div class="compact-price" style="color:{row['color']}">{row['price']}</div></div>""", unsafe_allow_html=True)
+            if st.button("✕", key=f"dw_{row['code']}"): 
+                update_cloud_remove(row['full_code'], "watchlist", current_user)
+                st.cache_data.clear(); st.rerun()
+else: st.info("暫無觀察名單。")
+
+# 3. 熱門
+st.markdown("---")
+st.subheader("🏆 市場熱門戰情室")
+HOT_LISTS = {
+    "🔥 熱門討論": ["2330.TW", "2317.TW", "3231.TW", "2382.TW", "2603.TW", "2609.TW"], 
+    "💎 人氣 ETF": ["00878.TW", "0056.TW", "0050.TW", "00919.TW", "00929.TW", "00940.TW"], 
+    "💡 焦點概念": ["1519.TW", "1513.TW", "2308.TW", "2454.TW", "6669.TW", "2376.TW"] 
+}
+hot_cols = st.columns(3)
+idx = 0
+for title, tickers in HOT_LISTS.items():
+    with hot_cols[idx]:
+        st.markdown(f'<div class="rank-title">{title}</div>', unsafe_allow_html=True)
+        df_hot = get_stock_data(tickers)
+        if not df_hot.empty:
+            html = '<div class="rank-box">'
+            for _, row in df_hot.iterrows():
+                html += f"""<div class="rank-row"><span class="rank-name">{row['name']}</span><span class="rank-price" style="color:{row['color']}">{row['sign']} {row['price']}</span></div>"""
+            html += '</div>'
+            st.markdown(html, unsafe_allow_html=True)
+    idx += 1
+
+# 4. 新聞
+st.markdown("---")
+st.subheader("🗞️ 產業新聞快遞")
+user_rss = get_list_from_cloud("news", current_user)
+with st.spinner("正在搜尋最新新聞..."):
+    news_buckets = fetch_and_filter_news(user_rss)
+
+display_order = ["🤖 AI 與半導體", "🏗️ 鋼鐵與水泥", "🚢 航運與運輸", "🚗 汽車與供應鏈", "💰 金融與銀行", "⚡ 重電與綠能", "💊 生技與防疫", "🏠 營建與房產", "🌍 其他頭條"]
+
+for category in display_order:
+    items = news_buckets.get(category, [])
+    if items:
+        st.markdown(f'<div class="news-category-header">{category} ({len(items)})</div>', unsafe_allow_html=True)
+        for n in items: 
+            st.markdown(f"""
+            <div class="news-item-compact">
+                <a href="{n['link']}" target="_blank" class="news-link-text">
+                    {n['title']}
+                </a>
+                <div class="news-meta-compact">
+                    {n['src']} • {n['date']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+st.markdown("<br><br>", unsafe_allow_html=True)
